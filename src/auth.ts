@@ -1,25 +1,15 @@
-const CHATGPT_API_BASE_URL = 'https://api.openai.com/v1/';
+import Authenticator from 'openai-authenticator';
 
 export async function getAccessToken(): Promise<string | null> {
   try {
-    const response = await fetch(`${CHATGPT_API_BASE_URL}login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        email: process.env.CHATGPT_EMAIL,
-        password: process.env.CHATGPT_PASSWORD,
-      }),
-    });
+    const authenticator = new Authenticator();
 
-    if (!response.ok) {
-      console.error('Error getting access token:', response.statusText);
-      return null;
-    }
+    const { accessToken } = (await authenticator.login(
+      process.env.CHATGPT_EMAIL,
+      process.env.CHATGPT_PASSWORD,
+    )) as { accessToken: string; cookie: string };
 
-    const data: Record<string, unknown> = await response.json();
-    return data.access_token as string;
+    return accessToken;
   } catch (error) {
     console.error('Error getting access token:', error);
     return null;

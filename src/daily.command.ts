@@ -1,156 +1,144 @@
 import {
-  ChatInputCommandInteraction,
-  Guild,
+  Collection,
+  CommandInteraction,
   Message,
+  SlashCommandBuilder,
+  TextBasedChannel,
   TextChannel,
 } from 'discord.js';
-import { getAccessToken } from './auth.js';
-import { ChatGPTUnofficialProxyAPI } from 'chatgpt';
-import { getArgument, validateDate } from './utils.js';
-import dayjs from 'dayjs';
-import * as crypto from 'crypto';
+import { getArgument, breakIntoChunks, validateDate } from './utils.js';
+import dayjs, { Dayjs } from 'dayjs';
 import { config } from 'dotenv';
+import { makeRequestToChatGPT } from './chat-gpt.controller.js';
 
 config();
 
-const generalPrompt = `Analyze all previous data marked with 'Part N of data' using NLP technique and extract it as short daily news`;
-const GUILD_SPECIFIC_CHANNELS = process.env.CHANNELS_IDS.split(',');
-const CHATGPT_TOKENS_CAP = 4096;
-const CHATGPT_TIMEOUT_MS = 30_000;
+export const dailyCommandData = new SlashCommandBuilder()
+  .setName('daily')
+  .setDescription('Generate short digest of key topics for specific channels')
+  .addStringOption((option) =>
+    option
+      .setName('date')
+      .setDescription('The date to fetch messages from (DD-MM-YYYY)')
+      .setRequired(false),
+  )
+  .addChannelOption((option) =>
+    option
+      .setName('channel')
+      .setDescription('Set channel from where content should be taken')
+      .setRequired(true),
+  );
 
-export async function handleDailyCommand(
-  interaction: ChatInputCommandInteraction,
+export async function sendDailyNews(channel: TextBasedChannel, date: Dayjs) {
+  const channelChunks = await channelMessagesIntoChunks(channel, date);
+  const formattedDate = dayjs(date).format('LL');
+
+  return makeRequestToChatGPT(channelChunks, formattedDate.toString());
+}
+
+export async function handleDailyCommandInteraction(
+  interaction: CommandInteraction,
 ): Promise<void> {
-  const dateArg = getArgument(interaction, 'date');
+  const dateArg = getArgument(interaction, 'date') as string;
   const date = dateArg ? validateDate(dateArg) : dayjs();
   if (!date) {
     await interaction.reply("Invalid date format. Please use 'DD-MM-YYYY'.");
     return;
   }
 
-  await interaction.deferReply();
+  const channelId = (getArgument(interaction, 'channel') ??
+    interaction.channelId) as string;
 
-  const csvLines = await collectCSVLines(interaction.guild, date);
-
-  const chunks = groupCSVtoChunks(csvLines, CHATGPT_TOKENS_CAP);
-
-  const chatGPTResponse = await sendCSVChunksToChatGPT(chunks);
-
-  if (!chatGPTResponse) {
-    await interaction.editReply('Error processing request.');
-  } else {
-    await interaction.editReply(chatGPTResponse);
-  }
-}
-
-function groupCSVtoChunks(csvLines: string[], chunkSize: number): string[] {
-  const chunks: string[] = [];
-  let currentChunk = '';
-
-  for (const line of csvLines) {
-    if (currentChunk.length + line.length + 1 <= chunkSize) {
-      currentChunk += currentChunk.length === 0 ? line : `\n${line}`;
-    } else {
-      chunks.push(currentChunk);
-      currentChunk = line;
-    }
+  const channel = interaction.guild.channels.cache.get(channelId);
+  if (!channel?.isTextBased()) {
+    await interaction.reply('Invalid channel.');
+    return;
   }
 
-  if (currentChunk.length > 0) {
-    chunks.push(currentChunk);
-  }
+  console.log(
+    `Starting daily news command handling for channel ${channel} and date ${date}`,
+  );
 
-  return chunks;
-}
-
-async function collectCSVLines(
-  guild: Guild,
-  date: dayjs.Dayjs,
-): Promise<string[]> {
-  const csvLines = ['username,date,content'];
-
-  for (const channelId of GUILD_SPECIFIC_CHANNELS) {
-    const channel = guild.channels.cache.get(channelId);
-    if (!channel || !channel.isTextBased()) continue;
-
-    const messages = await fetchMessagesInDateRange(
-      channel as TextChannel,
-      date,
-    );
-
-    csvLines.push(
-      ...messages.map(
-        ({ author, createdAt, content }) =>
-          `${author.username},${createdAt.toISOString()},${content}`,
-      ),
-    );
-  }
-
-  return csvLines;
-}
-
-async function fetchMessagesInDateRange(
-  channel: TextChannel,
-  date: dayjs.Dayjs,
-): Promise<Message[]> {
-  const startDate = date.startOf('day');
-  const endDate = date.endOf('day');
-
-  const messages = await channel.messages.fetch({
-    after: startDate.toString(),
-    before: endDate.toString(),
+  const a = await interaction.deferReply({
+    fetchReply: true,
   });
-
-  return Array.from(messages.values());
-}
-
-async function sendCSVChunksToChatGPT(
-  csvChunks: string[],
-): Promise<string | null> {
-  const accessToken = await getAccessToken();
-
-  if (!accessToken) return null;
-
-  const chatGPT = new ChatGPTUnofficialProxyAPI({
-    accessToken,
-  });
+  await a.edit('Collecting news...');
 
   try {
-    const conversationId = crypto.randomUUID();
-    let parentId: string = null;
+    const response = await sendDailyNews(channel, date);
 
-    for (let i = 0; i < csvChunks.length; i++) {
-      const messageId = crypto.randomUUID();
-      const prompt = `Part ${i + 1} of data:\n${csvChunks[i]}`;
-
-      console.log(
-        `${
-          parentId ? `[${conversationId}] ${parentId} <- ` : ''
-        }${messageId}: Sent chunk with index ${i}`,
-      );
-
-      const response = await chatGPT.sendMessage(prompt, {
-        timeoutMs: CHATGPT_TIMEOUT_MS,
-        messageId,
-        conversationId,
-        parentMessageId: parentId,
+    if (!response) {
+      await interaction.editReply('Error processing request.');
+    } else {
+      await interaction.editReply(response);
+    }
+  } catch (e) {
+    console.error(e);
+    if (interaction.isRepliable()) {
+      await interaction.reply({
+        content: 'Error during command processing',
       });
+    }
+  }
+}
 
-      console.log(`INTERMEDIATE RESPONSE: ${response.text}`);
-      parentId = messageId;
+async function channelMessagesIntoChunks(
+  channel: TextBasedChannel,
+  date: Dayjs,
+) {
+  console.log(`Breaking messages data for ${channel.id} channel into chunks`);
+
+  const messages = await fetchMessages(channel as TextChannel, date);
+  const lines = messages.map(
+    ({ author, createdAt, content }) =>
+      `${createdAt.toISOString()} — ${author.username}:\n${content
+        .trim()
+        .replace(/'/g, '"')}\n`,
+  );
+
+  return [`<#${channel.id}>`, breakIntoChunks(lines)] as const;
+}
+
+async function fetchMessages(channel: TextChannel, targetDate: dayjs.Dayjs) {
+  const targetMessages: Message[] = [];
+  let remainingRequests = 100;
+
+  const targetDayStart = targetDate.startOf('day').toDate();
+  const targetDayEnd = targetDate.endOf('day').toDate();
+
+  const options = { limit: 100, before: channel.lastMessageId };
+  let fetchedMessages: Collection<string, Message>;
+  let filteredSize = 0;
+
+  do {
+    if (remainingRequests === 0) {
+      console.log('Reached rate limit, waiting before continuing...');
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      remainingRequests = 100;
     }
 
-    const messageId = crypto.randomUUID();
-    const response = await chatGPT.sendMessage(generalPrompt, {
-      timeoutMs: CHATGPT_TIMEOUT_MS,
-      conversationId,
-      messageId,
-      parentMessageId: parentId,
-    });
+    fetchedMessages = await channel.messages.fetch(options);
+    console.log(
+      `Fetching messages in #${channel.name} channel before message ${options.before}...`,
+    );
+    options.before = fetchedMessages.last()?.id; // last message id
+    remainingRequests--;
 
-    return response.text;
-  } catch (error) {
-    console.error('Error sending request to ChatGPT:', error);
-    return null;
-  }
+    const filteredMessages = fetchedMessages.filter((message: Message) =>
+      dayjs(message.createdTimestamp).isBetween(targetDayStart, targetDayEnd),
+    );
+    filteredSize = filteredMessages.size;
+
+    targetMessages.push(...filteredMessages.values());
+
+    console.log(
+      `Fetched ${fetchedMessages.size}, pushed ${filteredMessages.size}`,
+    );
+
+    if (dayjs(fetchedMessages.last()?.createdAt).isBefore(targetDayStart)) {
+      break;
+    }
+  } while (fetchedMessages.size === 100 && filteredSize);
+
+  return targetMessages;
 }

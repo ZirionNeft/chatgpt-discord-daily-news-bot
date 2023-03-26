@@ -1,25 +1,36 @@
 import { ChatInputCommandInteraction, Client } from 'discord.js';
 import { config } from 'dotenv';
-import { handleDailyCommand } from './daily.command.js';
+import { handleDailyCommandInteraction } from './daily.command.js';
 import { registerSlashCommands } from './utils.js';
 
 config();
 
-const client = new Client({
+export const CLIENT = new Client({
   intents: ['Guilds', 'GuildMessages'],
 });
 
-client.once('ready', async () => {
+CLIENT.once('ready', async () => {
   console.log('Bot is ready!');
-  await registerSlashCommands(client);
+  await registerSlashCommands(CLIENT);
 });
 
-client.on('interactionCreate', async (interaction) => {
+CLIENT.on('interactionCreate', async (interaction) => {
   if (!interaction.isCommand()) return;
 
-  if (interaction.commandName === 'daily') {
-    await handleDailyCommand(interaction as ChatInputCommandInteraction);
+  try {
+    if (interaction.commandName === 'daily') {
+      await handleDailyCommandInteraction(
+        interaction as ChatInputCommandInteraction,
+      );
+    }
+  } catch (e) {
+    console.error(e);
+    if (interaction.isRepliable()) {
+      interaction.reply({
+        content: 'Fatal error during interaction',
+      });
+    }
   }
 });
 
-client.login(process.env.DISCORD_BOT_TOKEN);
+CLIENT.login(process.env.DISCORD_BOT_TOKEN);
