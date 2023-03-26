@@ -1,4 +1,4 @@
-import { Client, CommandInteraction, REST, Routes } from 'discord.js';
+import { Client, CommandInteraction } from 'discord.js';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat.js';
 import isBetween from 'dayjs/plugin/isBetween.js';
@@ -66,25 +66,6 @@ export async function registerSlashCommands(client: Client): Promise<void> {
   if (guild && !existingCommand) {
     try {
       console.log('Registering slash commands...');
-
-      const rest = new REST({ version: '10' }).setToken(
-        process.env.DISCORD_TOKEN,
-      );
-
-      await rest.delete(
-        Routes.applicationGuildCommand(
-          '729372307897712740',
-          guild.id,
-          '1088983275483181158',
-        ),
-      );
-      await rest.delete(
-        Routes.applicationGuildCommand(
-          '729372307897712740',
-          guild.id,
-          '1088902377878335658',
-        ),
-      );
 
       await guild.commands.create(dailyCommandData);
 
