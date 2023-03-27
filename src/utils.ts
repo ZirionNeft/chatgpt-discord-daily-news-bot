@@ -28,7 +28,7 @@ export function validateDate(dateStr: string): dayjs.Dayjs | null {
 }
 
 export function getArgument(interaction: CommandInteraction, name: string) {
-  return interaction.options.get(name).value;
+  return interaction.options.get(name)?.value;
 }
 
 export function breakIntoChunks(messages: string[]): string[] {
@@ -40,7 +40,7 @@ export function breakIntoChunks(messages: string[]): string[] {
     if (!chunk) {
       chunk = msgWithBr;
     } else {
-      if (encode(message).length > MAX_TOKENS) {
+      if (chunk.length + encode(msgWithBr).length > MAX_TOKENS) {
         result.push(chunk);
         chunk = message;
       } else {

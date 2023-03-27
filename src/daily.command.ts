@@ -1,6 +1,7 @@
 import {
   Collection,
   CommandInteraction,
+  GuildMember,
   Message,
   SlashCommandBuilder,
   TextBasedChannel,
@@ -16,18 +17,20 @@ config();
 export const dailyCommandData = new SlashCommandBuilder()
   .setName('daily')
   .setDescription('Generate short digest of key topics for specific channels')
+  .addChannelOption((option) =>
+    option
+      .setName('channel')
+      .setDescription('Set channel from where content should be taken')
+      .setRequired(false),
+  )
   .addStringOption((option) =>
     option
       .setName('date')
       .setDescription('The date to fetch messages from (DD-MM-YYYY)')
       .setRequired(false),
-  )
-  .addChannelOption((option) =>
-    option
-      .setName('channel')
-      .setDescription('Set channel from where content should be taken')
-      .setRequired(true),
   );
+
+let isCommandRunning = false;
 
 export async function sendDailyNews(channel: TextBasedChannel, date: Dayjs) {
   const channelChunks = await channelMessagesIntoChunks(channel, date);
@@ -39,6 +42,18 @@ export async function sendDailyNews(channel: TextBasedChannel, date: Dayjs) {
 export async function handleDailyCommandInteraction(
   interaction: CommandInteraction,
 ): Promise<void> {
+  if (!interaction.guild) {
+    await interaction.reply('This command can only be used in a server.');
+    return;
+  }
+
+  if (
+    !(interaction.member as GuildMember)?.permissions.has('ModerateMembers')
+  ) {
+    await interaction.reply('You are not permitted to use this command.');
+    return;
+  }
+
   const dateArg = getArgument(interaction, 'date') as string;
   const date = dateArg ? validateDate(dateArg) : dayjs();
   if (!date) {
@@ -55,14 +70,18 @@ export async function handleDailyCommandInteraction(
     return;
   }
 
+  if (isCommandRunning) {
+    await interaction.reply('Command is running. Please try a bit later');
+    return;
+  }
+
+  isCommandRunning = true;
+
+  await interaction.deferReply();
+
   console.log(
     `Starting daily news command handling for channel ${channel} and date ${date}`,
   );
-
-  const a = await interaction.deferReply({
-    fetchReply: true,
-  });
-  await a.edit('Collecting news...');
 
   try {
     const response = await sendDailyNews(channel, date);
@@ -75,10 +94,10 @@ export async function handleDailyCommandInteraction(
   } catch (e) {
     console.error(e);
     if (interaction.isRepliable()) {
-      await interaction.reply({
-        content: 'Error during command processing',
-      });
+      interaction.editReply('Error processing request.').catch(console.error);
     }
+  } finally {
+    isCommandRunning = false;
   }
 }
 
