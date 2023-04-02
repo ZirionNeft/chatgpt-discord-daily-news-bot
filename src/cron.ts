@@ -1,8 +1,8 @@
 import { config } from 'dotenv';
-import { CLIENT } from './main.js';
-import { sendDailyNews } from './daily.command.js';
 import dayjs from 'dayjs';
 import cron from 'node-cron';
+import { CLIENT } from './bot/client.js';
+import { getDailyNews } from './bot/commands/daily.command.js';
 
 config();
 
@@ -28,6 +28,19 @@ async function dailyNewsSchedule() {
       continue;
     }
 
-    await sendDailyNews(channel, dayjs().subtract(1, 'day'));
+    try {
+      const result = await getDailyNews(
+        channel,
+        dayjs().utc(false).subtract(1, 'day'),
+      );
+      if (result) {
+        await channel.send(result);
+        console.log(`Message successfully sent to #${channel.name} `);
+      } else {
+        console.error('Result is null');
+      }
+    } catch (e) {
+      console.error(e);
+    }
   }
 }
