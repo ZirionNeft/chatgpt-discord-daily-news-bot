@@ -1,15 +1,19 @@
 import { ChatGPTAPI } from 'chatgpt';
 import { encode } from 'gpt-3-encoder';
+import { config } from 'dotenv';
+
+config();
+
+const LANGUAGE = process.env.RESULT_LANGUAGE || 'English';
 
 const systemMessage = `You are a news reporter. Write the topic recaps using flavorful and emotional writing style, make the topics sound dramatic and suspenseful.
    Follow this rules:
-   - Input is a compressed with zlib base64-encoded data. Decompress it.
-   - From decompressed data, make a short digest news with jokes and black or ironic humor.
-   - Strict following: Use this style to each news entry: '**TITLE**: DESCRIPTION'. Use one line separator between each list entry as gap.
+   - Recap key discussion themes and make a short digest news with jokes and black or ironic humor with the louder titles.
+   - Strict follow this rule: Use this style to each news entry - '**NEWS TITLE**: DESCRIPTION'.
+   - Use one line separator between each list entry as gap.
    - Use Discord flavored markdown for text formatting.
-   - Strict following: Do not write any start header, just return list with news.
-   - Your output should be in Russian language.
-   - Mention the participants of discussions if it is important for context.`;
+   - Strict follow this rule: Do not write any header in start of result.
+   - Your output should be in ${LANGUAGE} language.`;
 
 const CHATGPT_TIMEOUT_MS = 2 * 60 * 1000;
 
@@ -26,7 +30,6 @@ export async function makeRequestToChatGPT(
       systemMessage,
       debug: true,
       completionParams: {
-        top_p: 0.7,
         temperature: 0.9,
       },
     });
@@ -46,7 +49,7 @@ export async function makeRequestToChatGPT(
         const responseTokens = encode(response.text).length;
         const promptTokens = encode(chunk).length;
         console.log(
-          `Prompt chunk tokens: ${promptTokens}, response tokens: ${responseTokens}; Estimated cost ~${
+          `Prompt chunk tokens: ${promptTokens}, response tokens: ${responseTokens}; Spent ~${
             ((responseTokens + promptTokens) / 1000) * TOKENS_COST
           }`,
         );
