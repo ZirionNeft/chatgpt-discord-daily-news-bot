@@ -29,17 +29,21 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract branch name
+        id: extract-branch
+        run: echo ::set-output name=branch-name::$(basename "${{ github.ref }}")
       - name: Build and push
         uses: docker/build-push-action@v3
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ github.ref }}
+            ghcr.io/${{ github.repository }}:${{ env.BRANCH_NAME }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new
         env:
           REPO_NAME: ${{ github.repository }}
+          BRANCH_NAME: ${{ steps.extract-branch.outputs.branch-name }}
       - name: Deploy to server
         uses: appleboy/ssh-action@master
         with:
@@ -49,7 +53,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script: |
             cd ${{ vars.SSH_PATH }}
-            export BRANCH_NAME=${{ github.ref }}
+            export BRANCH_NAME=$(basename "${{ github.ref }}")
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull
             docker compose up -d
