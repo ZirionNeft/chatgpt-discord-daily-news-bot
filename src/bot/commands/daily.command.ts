@@ -18,14 +18,17 @@ import {
   getArgument,
   replaceDiscordTags,
   getValidatedDate,
+  removeLinks,
 } from '../../utils.js';
 import { BUTTON, COMMAND } from '../constants.js';
 import { ButtonStyle } from 'discord-api-types/payloads/v10';
+import { encode } from 'gpt-3-encoder';
 
 config();
 
 const DISCORD_API_REQ_LIMIT = 100;
-const MAX_TOKENS = 2900; // maximum number of tokens for ChatGPT 3.5
+const CHUNK_SIZE = 3950; // maximum number of tokens for ChatGPT 3.5
+const MIN_TOKENS_FOR_RESULT = 300;
 
 export const cancelButton = new ButtonBuilder()
   .setCustomId(BUTTON.Cancel)
@@ -52,25 +55,52 @@ let isCommandRunning = false;
 
 let abortController: AbortController = null;
 
-export async function getDailyNews(
+export async function sendDailyNews(
   channel: TextBasedChannel,
+  target: TextBasedChannel,
   date: Dayjs,
-): Promise<string | false | null> {
-  const chunks = await channelMessagesIntoChunks(channel, date);
-  const formattedDate = dayjs(date).utc(false).format('LL');
+): Promise<{ error: string } | void> {
+  const chunks = await channelMessagesIntoChunks(target, date);
+  const formattedDate = date.format('LL');
 
   if (!chunks.length) {
-    return `\`No messages for day ${date.format('LL')} have been found\``;
+    return {
+      error: `\`No messages for day ${formattedDate} have been found\``,
+    };
+  }
+
+  if (chunks.length == 1 && encode(chunks[0]).length < MIN_TOKENS_FOR_RESULT) {
+    return {
+      error: `\`History must have at least ${MIN_TOKENS_FOR_RESULT} tokens to be analyzed\``,
+    };
   }
 
   abortController = new AbortController();
   const abortSignal = abortController.signal;
 
-  return makeRequestToChatGPT(
-    [channel.toString(), chunks],
+  const gptResponse = await makeRequestToChatGPT(
+    chunks,
     formattedDate.toString(),
     abortSignal,
   );
+
+  if (Array.isArray(gptResponse) && gptResponse.length) {
+    const header = `Новости дня за **${formattedDate}** в канале ${target}:`;
+
+    gptResponse[0] = `${header}\n\n${gptResponse[0]}`;
+
+    for (const response of gptResponse) {
+      await channel.send(response);
+    }
+    return;
+  } else if (typeof gptResponse == 'object' && 'error' in gptResponse) {
+    console.error(gptResponse.error);
+  } else {
+    console.error(`Unknown response error: ${JSON.stringify(gptResponse)}`);
+  }
+  return {
+    error: 'Internal error',
+  };
 }
 
 export function handleDailyCommandCancelling() {
@@ -99,7 +129,7 @@ export async function handleDailyCommandInteraction(
   }
 
   const dateArg = getArgument(interaction, 'date') as string;
-  const date = dateArg ? getValidatedDate(dateArg) : dayjs().utc(false);
+  const date = dateArg ? getValidatedDate(dateArg) : dayjs.utc();
   if (!date) {
     await interaction.reply({
       content: "Invalid date format. Please use 'DD.MM.YY'.",
@@ -108,7 +138,7 @@ export async function handleDailyCommandInteraction(
     return;
   }
 
-  if (date.isAfter(dayjs().utc(false), 'd')) {
+  if (date.isAfter(dayjs.utc(), 'd')) {
     await interaction.reply({
       content: 'Date should be today or before.',
       ephemeral: true,
@@ -177,20 +207,29 @@ export async function handleDailyCommandInteraction(
       ephemeral: true,
     });
 
-    const response = await getDailyNews(targetChannel, date);
+    const response = await sendDailyNews(
+      interaction.channel,
+      targetChannel,
+      date,
+    );
 
-    if (response === false) {
-      await interaction.editReply('Command aborted.');
-    } else if (!response) {
-      await interaction.editReply('Error processing request.');
+    if (response && 'error' in response) {
+      await interaction.editReply({
+        content: response.error,
+        components: [],
+      });
     } else {
       await interaction.deleteReply();
-      await interaction.channel.send(response);
     }
   } catch (e) {
     console.error(e);
     if (interaction.isRepliable()) {
-      interaction.editReply('Error processing request.').catch(console.error);
+      interaction
+        .editReply({
+          content: 'Error processing request.',
+          components: [],
+        })
+        .catch(console.error);
     }
   } finally {
     isCommandRunning = false;
@@ -205,22 +244,52 @@ async function channelMessagesIntoChunks(
   console.log(`Breaking messages data for ${channel.id} channel into chunks`);
 
   const messages = await fetchMessages(channel as TextChannel, date);
-  const formattedMessages = await Promise.all(
-    messages.map((message) => replaceDiscordTags(message)),
-  );
 
-  const lines = formattedMessages.map(
-    ({ author, createdAt, content }) =>
-      `${createdAt.toISOString()} — ${author.username}:\n${content
-        .trim()
-        .replace(/'/g, '"')}\n`,
-  );
+  const sanitize = async (message: Message) => {
+    const contentWithoutTags = await replaceDiscordTags(message);
+    const contentWithoutLinks = removeLinks(contentWithoutTags).trim();
+    return contentWithoutLinks.trim().replace(/'/g, '"');
+  };
 
-  return breakIntoChunks(lines, MAX_TOKENS);
+  let latestAuthor;
+  const lines = await messages.reduce(async (acc, message) => {
+    const sanitizedContent = await sanitize(message);
+
+    if (!sanitizedContent.length) {
+      return acc;
+    }
+
+    const result = await acc;
+    if (latestAuthor !== message.author.username) {
+      latestAuthor = message.author.username;
+
+      result.push(`${message.author.username}:\n${sanitizedContent}\n`);
+    } else {
+      result[result.length - 1] += `${sanitizedContent}\n`;
+    }
+
+    return result;
+  }, Promise.resolve<string[]>([]));
+
+  return breakIntoChunks(lines, CHUNK_SIZE);
 }
 
-async function fetchMessages(channel: TextChannel, targetDate: dayjs.Dayjs) {
-  const targetMessages: Message[] = [];
+async function fetchMessages(channel: TextChannel, targetDate: Dayjs) {
+  const isValidMessage = (message: Message<true>) => {
+    const isSameDate = dayjs
+      .utc(message.createdTimestamp)
+      .isSame(targetDate, 'd');
+    const isNotBot = !message.author.bot;
+    const isNotEmptyMessage = !!message.content.trim().length;
+    const isNotOnlyLink = removeLinks(message.content).trim().length;
+
+    return isSameDate && isNotBot && isNotEmptyMessage && isNotOnlyLink;
+  };
+
+  const firstMessage = await channel.messages.fetch(channel.lastMessageId);
+  const targetMessages: Message[] = isValidMessage(firstMessage)
+    ? [firstMessage]
+    : [];
   let remainingRequests = DISCORD_API_REQ_LIMIT;
 
   const options = { limit: 100, before: channel.lastMessageId };
@@ -241,18 +310,7 @@ async function fetchMessages(channel: TextChannel, targetDate: dayjs.Dayjs) {
     options.before = fetchedMessages.last()?.id; // last message id
     remainingRequests--;
 
-    const filteredMessages = fetchedMessages.filter(
-      (message: Message<true>) => {
-        const isSameDate = dayjs(message.createdTimestamp)
-          .utc(false)
-          .isSame(targetDate, 'd');
-        const isNotBot = !message.author.bot;
-
-        const isNotEmptyMessage = !!message.content.trim().length;
-
-        return isSameDate && isNotBot && isNotEmptyMessage;
-      },
-    );
+    const filteredMessages = fetchedMessages.filter(isValidMessage);
 
     targetMessages.push(...filteredMessages.values());
 
@@ -260,10 +318,8 @@ async function fetchMessages(channel: TextChannel, targetDate: dayjs.Dayjs) {
       `Fetched ${fetchedMessages.size}, pushed ${filteredMessages.size}`,
     );
   } while (
-    !dayjs(fetchedMessages.last()?.createdAt)
-      .utc(false)
-      .isBefore(targetDate, 'd')
+    !dayjs.utc(fetchedMessages.last()?.createdAt).isBefore(targetDate, 'd')
   );
 
-  return targetMessages;
+  return targetMessages.reverse();
 }

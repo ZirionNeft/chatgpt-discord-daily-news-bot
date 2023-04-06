@@ -16,6 +16,8 @@ config();
 
 const discordTagsRegex =
   /<@[!&]?(\d+)>|<#(\d+)>|<@&(\d+)>|<a?:\w+:(\d+)>|<:\w+:(\d+)>/g;
+export const urlRegex =
+  /https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,}/gi;
 
 const localeData = await import(
   `dayjs/locale/${process.env.DAYJS_LOCALE || 'en'}.js`
@@ -25,7 +27,7 @@ dayjs.locale(localeData.default);
 export const DATE_FORMAT = 'DD.MM.YY';
 
 export function getValidatedDate(dateStr: string): dayjs.Dayjs | null {
-  const parsedDate = dayjs(dateStr, DATE_FORMAT, true).utc(false);
+  const parsedDate = dayjs.utc(dateStr, DATE_FORMAT);
   return parsedDate.isValid() ? parsedDate : null;
 }
 
@@ -37,14 +39,22 @@ export async function replaceDiscordTags(message: Message) {
   let replacedStr = message.content;
   const matches = message.content.match(discordTagsRegex);
 
-  if (!matches) return message;
+  if (!matches) return replacedStr;
 
   for (const match of matches) {
     if (match.startsWith('<@')) {
-      const userId = match.replace(/[<@!>]/g, '');
-      const user = await message.client.users.fetch(userId);
-      if (user) {
-        replacedStr = replacedStr.replace(match, `@${user.username}`);
+      if (match.startsWith('<@&')) {
+        const roleId = match.replace(/[<@&>]/g, '');
+        const role = message.guild?.roles.cache.get(roleId);
+        if (role) {
+          replacedStr = replacedStr.replace(match, `@${role.name}`);
+        }
+      } else {
+        const userId = match.replace(/[<@!>]/g, '');
+        const user = await message.client.users.fetch(userId);
+        if (user) {
+          replacedStr = replacedStr.replace(match, `@${user.username}`);
+        }
       }
     } else if (match.startsWith('<#')) {
       const channelId = match.replace(/[<#>]/g, '');
@@ -53,12 +63,6 @@ export async function replaceDiscordTags(message: Message) {
       ) as TextChannel;
       if (channel) {
         replacedStr = replacedStr.replace(match, `#${channel.name}`);
-      }
-    } else if (match.startsWith('<@&')) {
-      const roleId = match.replace(/[<@&>]/g, '');
-      const role = message.guild?.roles.cache.get(roleId);
-      if (role) {
-        replacedStr = replacedStr.replace(match, `@${role.name}`);
       }
     } else if (match.startsWith('<a:')) {
       const emojiId = match.match(/<a:\w+:(\d+)>/)?.[1];
@@ -69,9 +73,11 @@ export async function replaceDiscordTags(message: Message) {
     }
   }
 
-  message.content = replacedStr;
+  return replacedStr;
+}
 
-  return message;
+export function removeLinks(text: string) {
+  return text.replaceAll(urlRegex, '');
 }
 
 export function breakIntoChunks(data: string[], chunkSize: number): string[] {
@@ -79,21 +85,20 @@ export function breakIntoChunks(data: string[], chunkSize: number): string[] {
   let chunk = '';
 
   for (const part of data) {
-    const msgWithBr = `${part}\n`;
     if (!chunk) {
-      chunk = msgWithBr;
+      chunk = part;
     } else {
-      if (chunk.length + encode(msgWithBr).length > chunkSize) {
-        result.push(chunk);
+      if (chunk.length + encode(part).length > chunkSize) {
+        result.push(chunk.trim());
         chunk = part;
       } else {
-        chunk += msgWithBr;
+        chunk += part;
       }
     }
   }
 
   if (chunk.length > 0) {
-    result.push(chunk);
+    result.push(chunk.trim());
   }
 
   return result;
