@@ -38,11 +38,11 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ env.BRANCH_NAME }}
+            ghcr.io/${{ github.repository | lower }}:${{ env.BRANCH_NAME }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new
         env:
-          REPO_NAME: ${{ github.repository }}
+          REPO_NAME: ${{ github.repository | lower }}
           BRANCH_NAME: ${{ steps.extract-branch.outputs.branch-name }}
       - name: Deploy to server
         uses: appleboy/ssh-action@master
