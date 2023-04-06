@@ -19,7 +19,7 @@ jobs:
         run: echo ::set-output name=branch-name::$(basename "${{ github.ref }}")
       - name: Lowercase repo name
         id: lowercase-repo
-        run: echo ::set-output name=value::$("${{ github.repository }}" | awk -F/ '{print tolower($2)}')
+        run: echo ::set-output name=lowercase-name::$("${{ github.repository }}" | awk '{print tolower($0)}')
 
       # GENERAL
       - name: Checkout
@@ -47,11 +47,11 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ steps.lowercase-repo.outputs.value }}:${{ env.BRANCH_NAME }}
+            ghcr.io/${{ env.REPO_NAME }}:${{ env.BRANCH_NAME }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new
         env:
-          REPO_NAME: ${{ steps.lowercase-repo.outputs.value }}
+          REPO_NAME: ${{ steps.lowercase-repo.outputs.lowercase-name }}
           BRANCH_NAME: ${{ steps.extract-branch.outputs.branch-name }}
 
       - name: Deploy to server
