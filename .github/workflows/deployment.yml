@@ -29,20 +29,19 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Extract branch name
-        id: extract-branch
-        run: echo ::set-output name=branch-name::$(basename "${{ github.ref }}")
+
+
       - name: Build and push
         uses: docker/build-push-action@v3
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository | lower }}:${{ env.BRANCH_NAME }}
+            ghcr.io/${{ steps.lowercase-repo.outputs.value }}:${{ env.BRANCH_NAME }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new
         env:
-          REPO_NAME: ${{ github.repository | lower }}
+          REPO_NAME: ${{ steps.lowercase-repo.outputs.value }}
           BRANCH_NAME: ${{ steps.extract-branch.outputs.branch-name }}
       - name: Deploy to server
         uses: appleboy/ssh-action@master
@@ -64,3 +63,11 @@ jobs:
         run: |
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      # UTILITIES
+      - name: Extract branch name
+        id: extract-branch
+        run: echo ::set-output name=branch-name::$(basename "${{ github.ref }}")
+      - name: Lowercase repo name
+        id: lowercase-repo
+        run: echo ::set-output name=value::$("${{ github.repository }}" | awk -F/ '{print tolower($2)}')
