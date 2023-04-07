@@ -63,7 +63,8 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script: |
             cd ${{ vars.SSH_PATH }}
-            export BRANCH_NAME=$(basename "${{ github.ref }}")
+            export BRANCH_NAME=${{ steps.extract-branch.outputs.branch-name }}
+            export REPO_NAME=${{ steps.lowercase-repo.outputs.lowercase-name }}
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull
             docker compose up -d
