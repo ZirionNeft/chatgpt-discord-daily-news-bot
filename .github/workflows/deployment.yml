@@ -19,7 +19,7 @@ jobs:
         run: echo ::set-output name=branch-name::$(basename "${{ github.ref }}")
       - name: Lowercase repo name
         id: lowercase-repo
-        run: echo ::set-output name=lowercase-name::$("${{ github.repository }}" | awk '{print tolower($0)}')
+        run: echo ::set-output name=lowercase-name::$(echo "${{ github.repository }}" | awk '{print tolower($0)}')
 
       # GENERAL
       - name: Checkout
