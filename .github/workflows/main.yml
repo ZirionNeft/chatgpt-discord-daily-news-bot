@@ -24,7 +24,10 @@ jobs:
         run: echo ::set-output name=lowercase-name::$(echo "${{ github.repository }}" | awk '{print tolower($0)}')
       - name: Save Docker Compose file
         id: docker-compose
-        run: echo "::set-output name=file::$(cat docker-compose.yml)"
+        run: |
+          COMPOSE_FILE=$(cat docker-compose.yml)
+          COMPOSE_FILE_WITH_NEWLINES="${COMPOSE_FILE//$'\n'/'%0A'}"
+          echo "::set-output name=file::$COMPOSE_FILE_WITH_NEWLINES"
 
       # GENERAL
       - name: Set up Docker Buildx
