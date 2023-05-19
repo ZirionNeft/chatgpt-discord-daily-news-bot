@@ -5,7 +5,7 @@ services:
         container_name: daily-bot
         image: "ghcr.io/${REPO_NAME}:${BRANCH_NAME}"
         build:
-            context: ""
+            context: ./
             dockerfile: Dockerfile
         restart: unless-stopped
         env_file: .env
