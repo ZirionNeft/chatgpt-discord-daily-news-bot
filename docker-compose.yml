@@ -8,4 +8,10 @@ services:
             context: ./
             dockerfile: Dockerfile
         restart: unless-stopped
-        env_file: .env
+        environment:
+          DISCORD_TOKEN: ${DISCORD_TOKEN}
+          OPENAI_API_KEY: ${OPENAI_API_KEY}
+          GUILD_ID: ${GUILD_ID}
+          CHANNELS_IDS: ${CHANNELS_IDS}
+          DAYJS_LOCALE: ${DAYJS_LOCALE}
+          RESULT_LANGUAGE: ${RESULT_LANGUAGE}
