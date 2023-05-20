@@ -21,17 +21,17 @@
     "test:watch": "jest --watch"
   },
   "dependencies": {
-    "chatgpt": "^5.2.2",
+    "chatgpt": "^5.2.4",
     "dayjs": "^1.11.7",
-    "discord.js": "^14.9.0",
+    "discord.js": "^14.11.0",
     "dotenv": "^16.0.3",
     "gpt-3-encoder": "^1.1.4",
-    "node-cron": "^3.0.2",
-    "tslib": "^2.5.0"
+    "croner": "^6.0.3",
+    "tslib": "^2.5.2"
   },
   "devDependencies": {
     "@types/jest": "~29.2",
-    "@types/node": "^18.15.7",
+    "@types/node": "^18.16.13",
     "@types/node-cron": "^3.0.7",
     "@typescript-eslint/eslint-plugin": "^5.56.0",
     "@typescript-eslint/parser": "^5.56.0",
@@ -44,11 +44,8 @@
     "rimraf": "^4.4.1",
     "ts-jest": "~29.0",
     "tsutils": "^3.21.0",
-    "typescript": "^5.0.2"
+    "typescript": "^5.0.4"
   },
-  "author": "Jakub Synowiec <jsynowiec@users.noreply.github.com>",
-  "license": "Apache-2.0",
-  "volta": {
-    "node": "18.12.1"
-  }
+  "author": "zirionneft <Nikita Kryukov>",
+  "license": "Apache-2.0"
 }

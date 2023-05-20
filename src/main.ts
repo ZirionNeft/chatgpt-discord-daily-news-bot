@@ -5,6 +5,8 @@ config();
 
 import './cron.js';
 
+console.log('PID:', process.pid);
+
 async function bootstrap() {
   await initBotClient();
 }

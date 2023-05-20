@@ -1,8 +1,8 @@
 import { config } from 'dotenv';
 import dayjs from 'dayjs';
-import cron from 'node-cron';
 import { CLIENT } from './bot/client.js';
 import { sendDailyNews } from './bot/commands/daily.command.js';
+import Cron from 'croner';
 
 config();
 
@@ -10,9 +10,13 @@ const GUILD_SCHEDULED_CHANNELS = process.env.CHANNELS_IDS.split(',');
 const GUILD_ID = process.env.GUILD_ID;
 
 // every day at 21:00:00 UTC
-cron.schedule('0 21 * * *', () => dailyNewsSchedule(), {
-  timezone: 'Etc/UTC',
-});
+Cron(
+  '0 21 * * *',
+  {
+    timezone: 'Etc/UTC',
+  },
+  () => dailyNewsSchedule(),
+);
 
 async function dailyNewsSchedule() {
   console.log('Scheduled Daily News task is performing');
