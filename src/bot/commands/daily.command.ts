@@ -90,7 +90,7 @@ export async function sendDailyNews(
     gptResponse[0] = `${header}\n\n${gptResponse[0]}`;
 
     for (const response of gptResponse) {
-      await channel.send(response);
+      await channel.send(`\`\`\`\n${response}\n\`\`\``);
     }
     return;
   } else if (typeof gptResponse == 'object' && 'error' in gptResponse) {
@@ -113,16 +113,6 @@ export async function handleDailyCommandInteraction(
   if (!interaction.guild) {
     await interaction.reply({
       content: 'This command can only be used in a server.',
-      ephemeral: true,
-    });
-    return;
-  }
-
-  if (
-    !(interaction.member as GuildMember)?.permissions.has('ModerateMembers')
-  ) {
-    await interaction.reply({
-      content: 'You are not permitted to use this command.',
       ephemeral: true,
     });
     return;
