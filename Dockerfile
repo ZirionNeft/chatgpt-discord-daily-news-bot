@@ -1,7 +1,6 @@
 FROM node:18-alpine
 
 RUN apk add g++ make python3
-RUN npm install -g yarn
 
 WORKDIR /usr/src/app
 
