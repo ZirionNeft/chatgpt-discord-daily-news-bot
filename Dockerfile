@@ -1,16 +1,17 @@
 FROM node:18-alpine
 
 RUN apk add g++ make python3
+RUN npm install -g yarn
 
 WORKDIR /usr/src/app
 
 COPY package*.json ./
 
-RUN npm ci
+RUN yarn install --frozen-lockfile
 
 COPY src ./src
 COPY tsconfig*.json ./
 
-RUN npx tsc -p tsconfig.json
+RUN yarn dlx tsc -p tsconfig.json
 
-CMD ["npm", "start"]
+CMD ["yarn", "start"]

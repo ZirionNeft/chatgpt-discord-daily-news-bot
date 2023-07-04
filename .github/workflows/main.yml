@@ -63,12 +63,22 @@ jobs:
       - name: Run docker on droplet
         uses: appleboy/ssh-action@master
         env:
+          NODE_ENV: ${{ vars.NODE_ENV }}
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DISCORD_MAX_MESSAGE_LENGTH: ${{ vars.DISCORD_MAX_MESSAGE_LENGTH }}
+          DISCORD_API_REQ_LIMIT: ${{ vars.DISCORD_API_REQ_LIMIT }}
           GUILD_ID: ${{ vars.GUILD_ID }}
           CHANNELS_IDS: ${{ vars.CHANNELS_IDS }}
           DAYJS_LOCALE: ${{ vars.DAYJS_LOCALE }}
           RESULT_LANGUAGE: ${{ vars.RESULT_LANGUAGE }}
+          GPT_MODEL: ${{ vars.GPT_MODEL }}
+          GPT_TOKEN_COST: ${{ vars.GPT_TOKEN_COST }}
+          GPT_TIMEOUT_MS: ${{ vars.GPT_TIMEOUT_MS }}
+          GPT_TEMPERATURE: ${{ vars.GPT_TEMPERATURE }}
+          GPT_MODEL_TOKENS: ${{ vars.GPT_MODEL_TOKENS }}
+          GPT_COMPLETION_TOKENS: ${{ vars.GPT_COMPLETION_TOKENS }}
+          GPT_MIN_TOKENS_TO_ANALYZE: ${{ vars.GPT_MIN_TOKENS_TO_ANALYZE }}
           BRANCH_NAME: ${{ steps.extract-branch.outputs.branch-name }}
           REPO_NAME: ${{ steps.lowercase-repo.outputs.lowercase-name }}
         with:
@@ -76,7 +86,7 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          envs: DISCORD_TOKEN,OPENAI_API_KEY,GUILD_ID,CHANNELS_IDS,DAYJS_LOCALE,RESULT_LANGUAGE,BRANCH_NAME,REPO_NAME
+          envs: true
           script: |
             cd ${{ vars.SSH_PATH }}
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
