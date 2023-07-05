@@ -86,7 +86,25 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          envs: true
+          envs: |
+            NODE_ENV,
+            DISCORD_TOKEN,
+            OPENAI_API_KEY,
+            DISCORD_MAX_MESSAGE_LENGTH,
+            DISCORD_API_REQ_LIMIT,
+            GUILD_ID,
+            CHANNELS_IDS,
+            DAYJS_LOCALE,
+            RESULT_LANGUAGE,
+            GPT_MODEL,
+            GPT_TOKEN_COST,
+            GPT_TIMEOUT_MS,
+            GPT_TEMPERATURE,
+            GPT_MODEL_TOKENS,
+            GPT_COMPLETION_TOKENS,
+            GPT_MIN_TOKENS_TO_ANALYZE,
+            BRANCH_NAME,
+            REPO_NAME
           script: |
             cd ${{ vars.SSH_PATH }}
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
