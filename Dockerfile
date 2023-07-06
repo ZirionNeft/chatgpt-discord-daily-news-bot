@@ -13,6 +13,6 @@ RUN yarn install --frozen-lockfile
 COPY src ./src
 COPY tsconfig*.json ./
 
-RUN tsc -p tsconfig.json
+RUN yarn dlx tsc -p tsconfig.json
 
 CMD ["yarn", "start"]
