@@ -63,17 +63,6 @@ jobs:
           REPO_NAME: ${{ steps.lowercase-repo.outputs.lowercase-name }}
           BRANCH_NAME: ${{ steps.extract-branch.outputs.branch-name }}
 
-      - name: Copy configs
-        uses: appleboy/scp-action@98930d398ce425af0148ea8a0e3295cd04fe2b7a
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.SSH_PORT }}
-          source: "docker-compose.yml"
-          overwrite: true
-          target: ${{ vars.SSH_PATH }}
-
       - name: Run docker on droplet
         uses: appleboy/ssh-action@master
         env:
@@ -105,6 +94,7 @@ jobs:
             cd ${{ vars.SSH_PATH }}
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull
+            echo "${{ steps.docker-compose.outputs.file }}" >> docker-compose.yml
             docker compose -f docker-compose.yml up -d
 
       #         Temp fix
