@@ -24,11 +24,7 @@ export class BotClient {
   }
 
   async init() {
-    const token = this.configService.get<string>('DISCORD_TOKEN');
-
-    if (!token) {
-      throw new InternalErrorException('Discord token is not specified');
-    }
+    const token = this.configService.getOrThrow<string>('DISCORD_TOKEN');
 
     this._client.once('ready', async () => {
       console.log('Bot is ready!');
@@ -58,10 +54,7 @@ export class BotClient {
   }
 
   async getGuild() {
-    const guildId = this.configService.get<string>('GUILD_ID');
-    if (!guildId) {
-      throw new InternalErrorException('Guild id is not specified in .env');
-    }
+    const guildId = this.configService.getOrThrow<string>('GUILD_ID');
 
     const guild = await this._client.guilds.fetch(guildId);
 

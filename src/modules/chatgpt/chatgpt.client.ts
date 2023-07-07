@@ -24,11 +24,7 @@ export class ChatGPTClient implements OnProviderInit {
   }
 
   onProviderInit() {
-    const apiKey = this.configService.get('OPENAI_API_KEY');
-
-    if (!apiKey) {
-      throw new InternalErrorException('OpenAI api key is not specified');
-    }
+    const apiKey = this.configService.getOrThrow('OPENAI_API_KEY');
 
     const model = this.configService.get('GPT_MODEL', 'gpt-3.5-turbo');
     const maxModelTokens = +this.configService.get('GPT_MODEL_TOKENS', 3950);
@@ -41,10 +37,12 @@ export class ChatGPTClient implements OnProviderInit {
 
     console.info('System message is:', systemMessage);
 
+    const nodeEnv = this.configService.get('NODE_ENV', 'production');
+
     this._client = new ChatGPTAPI({
       apiKey,
       systemMessage,
-      debug: process.env.NODE_ENV === 'development',
+      debug: nodeEnv === 'development',
       completionParams: {
         model,
         temperature,
