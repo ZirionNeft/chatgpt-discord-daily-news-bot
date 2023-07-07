@@ -6,10 +6,9 @@
       "esnext"
     ],
     "moduleResolution": "node",
-    "baseUrl": "./",
+    "baseUrl": ".",
     "outDir": "build",
     "esModuleInterop": true,
-    "importHelpers": true,
     "alwaysStrict": true,
     "sourceMap": true,
     "incremental": true,
@@ -23,6 +22,9 @@
     "noImplicitThis": false,
     "strictNullChecks": false,
   },
+  "include": [
+    "src"
+  ],
   "exclude": [
     "node_modules",
     "test",
