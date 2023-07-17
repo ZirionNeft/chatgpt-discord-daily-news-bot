@@ -1,41 +1,35 @@
-import { ButtonInteraction } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonInteraction } from 'discord.js';
 import {
-  BaseInteractor,
-  FailedCommandException,
+  DiscordInteractor,
   Inject,
   Interactor,
   LinkCommand,
   Provider,
+  RequestWrapper,
 } from '../../../../core';
 import { CancelDailyNewsCommand } from './cancel-daily-news.command';
 
 @Provider()
 @Interactor()
-export class CancelDailyNewsInteractor extends BaseInteractor {
+export class CancelDailyNewsInteractor extends DiscordInteractor {
   @Inject(CancelDailyNewsCommand)
-  @LinkCommand('handleCancelDailyNews')
+  @LinkCommand('handleCancelDailyNews', { scopes: ['text'] })
   private readonly cancelDailyNewsCommand: CancelDailyNewsCommand;
 
-  async handleCancelDailyNews(interaction: ButtonInteraction) {
-    try {
-      await this.cancelDailyNewsCommand.run();
+  async handleCancelDailyNews(request: RequestWrapper<ButtonInteraction>) {
+    const row = new ActionRowBuilder<ButtonBuilder>().setComponents(
+      this.cancelDailyNewsCommand.inProcessComponentBuilder,
+    );
 
-      await interaction.deleteReply();
-    } catch (e) {
-      console.error(e);
+    await request.update({
+      components: [row],
+    });
 
-      let content = 'Error processing request.';
-      if (e instanceof FailedCommandException) {
-        content = e.message;
-      }
-      if (interaction.isRepliable()) {
-        interaction
-          .editReply({
-            content,
-            components: [],
-          })
-          .catch(console.error);
-      }
-    }
+    await this.cancelDailyNewsCommand.run(request);
+
+    await request.followUp({
+      content: 'Interaction cancelled.',
+      ephemeral: true,
+    });
   }
 }

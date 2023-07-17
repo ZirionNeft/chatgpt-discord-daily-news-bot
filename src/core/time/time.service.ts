@@ -3,7 +3,6 @@ import customParseFormat from 'dayjs/plugin/customParseFormat';
 import isBetween from 'dayjs/plugin/isBetween';
 import localizedFormat from 'dayjs/plugin/localizedFormat';
 import utc from 'dayjs/plugin/utc';
-import { InvalidDateFormatException } from './exceptions';
 
 export class TimeService {
   static {
@@ -20,10 +19,6 @@ export class TimeService {
 
   static resolveFormat(date: string | Dayjs, format: string): Dayjs {
     const parsedDate = dayjs.utc(date, format);
-
-    if (!parsedDate.isValid()) {
-      throw new InvalidDateFormatException(date, format);
-    }
 
     return parsedDate;
   }

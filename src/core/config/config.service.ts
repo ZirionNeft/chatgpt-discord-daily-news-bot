@@ -1,7 +1,7 @@
 import { config } from 'dotenv';
 import * as process from 'process';
+import { InternalErrorException } from '../common';
 import { Provider } from '../framework';
-import { InternalErrorException } from './exceptions';
 
 @Provider()
 export class ConfigService {

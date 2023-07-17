@@ -1,6 +1,6 @@
 import { BackoffWrappedException } from './backoff-wrapped.exception';
 
-export function UseBackoff(tries = 3) {
+export function UseBackoff(tries = 3, ignoredErrorNames: string[] = []) {
   return function actualDecorator(
     originalMethod: (...args: any[]) => Promise<any>,
     _context: ClassMethodDecoratorContext,
@@ -13,6 +13,12 @@ export function UseBackoff(tries = 3) {
           triesCounter++;
           return await originalMethod.call(this, ...args);
         } catch (e) {
+          if (
+            ignoredErrorNames.some((ignoredError) => e.name === ignoredError)
+          ) {
+            throw e;
+          }
+
           if (triesCounter <= tries) {
             return f();
           }

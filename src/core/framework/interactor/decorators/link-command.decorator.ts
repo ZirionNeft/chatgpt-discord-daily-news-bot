@@ -1,7 +1,15 @@
-import { BaseCommand } from '../../command';
-import { BaseInteractor } from '../interactor.abstract';
+import { BaseCommand, CommandOptions } from '../../command';
+import { BaseInteractor } from '../base-interactor.abstract';
 
-export function LinkCommand(methodName: string) {
+const defaultOptions: CommandOptions = {
+  concurrent: true,
+  scopes: ['all'],
+};
+
+export function LinkCommand(
+  methodName: string,
+  options: CommandOptions = { ...defaultOptions },
+) {
   return function <This extends BaseInteractor>(
     _target: undefined,
     _context: ClassFieldDecoratorContext<This>,
@@ -10,9 +18,13 @@ export function LinkCommand(methodName: string) {
       this: This,
       value: Value,
     ) {
-      this.commands.set(value.actionId, {
+      this.commandsLinkMap.set(value.actionId, {
         type: value.constructor as Type<Value>,
         handlerName: methodName,
+        options: {
+          ...defaultOptions,
+          ...options,
+        },
       });
       return value;
     };

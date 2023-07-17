@@ -1,6 +1,11 @@
 import { ButtonStyle } from 'discord-api-types/payloads/v10';
-import { ButtonBuilder } from 'discord.js';
-import { BaseCommand, Inject, Provider } from '../../../../core';
+import { ButtonBuilder, ButtonInteraction } from 'discord.js';
+import {
+  BaseCommand,
+  Inject,
+  Provider,
+  RequestWrapper,
+} from '../../../../core';
 import { AbortControllerProvider } from '../abort-controller.provider';
 import { CancelDailyNewsComponentId } from '../daily-news.constants';
 
@@ -15,8 +20,25 @@ export class CancelDailyNewsCommand extends BaseCommand<ButtonBuilder> {
     super();
   }
 
-  async run(): Promise<void> {
+  private _inProcessComponentBuilder: ButtonBuilder;
+
+  get inProcessComponentBuilder() {
+    if (!this._inProcessComponentBuilder) {
+      this._inProcessComponentBuilder = this.inProcessComponentBuilderFactory();
+    }
+    return this._inProcessComponentBuilder;
+  }
+
+  async run(_request: RequestWrapper<ButtonInteraction>): Promise<void> {
     this.abortController.abort();
+  }
+
+  protected inProcessComponentBuilderFactory() {
+    return new ButtonBuilder()
+      .setCustomId('cancelling')
+      .setLabel('Cancelling...')
+      .setDisabled(true)
+      .setStyle(ButtonStyle.Danger);
   }
 
   protected componentBuilderFactory() {

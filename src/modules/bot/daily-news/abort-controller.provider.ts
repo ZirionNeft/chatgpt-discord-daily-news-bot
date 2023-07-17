@@ -1,4 +1,14 @@
-import { Provider } from '../../../core';
+import { InjectScope, Provider } from '../../../core';
 
-@Provider()
-export class AbortControllerProvider extends AbortController {}
+@Provider(AbortControllerProvider, InjectScope.REQUEST)
+export class AbortControllerProvider implements AbortController {
+  private readonly abortController = new AbortController();
+
+  get signal(): AbortSignal {
+    return this.abortController.signal;
+  }
+
+  abort(reason?: any): void {
+    this.abortController.abort(reason);
+  }
+}

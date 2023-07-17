@@ -3,6 +3,7 @@ import {
   ConfigService,
   Inject,
   InternalErrorException,
+  Logger,
   Provider,
   UseBackoff,
 } from '../../core';
@@ -15,6 +16,8 @@ const BACKOFF_SEND_MESSAGE_TRIES = 3;
 
 @Provider()
 export class ChatGPTService {
+  private readonly logger = new Logger(this.constructor.name);
+
   @Inject(ChatGPTClient)
   private readonly client: ChatGPTClient;
 
@@ -26,7 +29,7 @@ export class ChatGPTService {
 
   async getCompletion(chunks: string[], date: string): Promise<string[]> {
     try {
-      console.log(`Sending message to ChatGPT for the date '${date}'`);
+      this.logger.info(`Sending message to ChatGPT for the date '${date}'`);
 
       const completionParts: string[] = [];
 
@@ -36,7 +39,10 @@ export class ChatGPTService {
 
           completionParts.push(response);
         } catch (e) {
-          console.error(e);
+          if (e.name === 'AbortError') {
+            throw e;
+          }
+          this.logger.error(e);
         }
       }
 
@@ -45,13 +51,13 @@ export class ChatGPTService {
       if (e.name === 'AbortError') {
         throw new RequestAbortedException();
       }
-      console.error(e);
+      this.logger.error(e);
 
       throw new InternalErrorException(e.message);
     }
   }
 
-  @UseBackoff(BACKOFF_SEND_MESSAGE_TRIES)
+  @UseBackoff(BACKOFF_SEND_MESSAGE_TRIES, ['AbortError'])
   private async sendMessage(text: string): Promise<string> {
     const timeoutMs = +this.config.get('GPT_TIMEOUT_MS', 2 * 60 * 1000);
 
@@ -63,7 +69,8 @@ export class ChatGPTService {
     const tokenCost = +this.config.get('GPT_TOKEN_COST', 0.0003);
     const responseTokens = encode(response.text).length;
     const promptTokens = encode(text).length;
-    console.info(
+
+    this.logger.info(
       `Prompt chunk tokens: ${promptTokens}, GPT completed tokens: ${responseTokens}; Spent ~${
         ((responseTokens + promptTokens) / 1000) * tokenCost
       }`,

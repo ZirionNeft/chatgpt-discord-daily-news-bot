@@ -4,7 +4,9 @@ import {
   ConfigService,
   cutUrlFromString,
   delay,
+  FailedCommandException,
   Inject,
+  Logger,
   Provider,
 } from '../../core';
 
@@ -13,6 +15,8 @@ const DISCORD_TAGS_PATTERN =
 
 @Provider()
 export class MessagesService {
+  private readonly logger = new Logger(this.constructor.name);
+
   private readonly _apiReqLimit: number;
 
   @Inject(ConfigService)
@@ -25,7 +29,11 @@ export class MessagesService {
     );
   }
 
-  async fetchMessages(channel: TextChannel, targetDate: Dayjs) {
+  async fetchMessages(
+    channel: TextChannel,
+    targetDate: Dayjs,
+    signal?: AbortSignal,
+  ) {
     const isValidMessage = (message: Message<true>) => {
       const isSameDate = dayjs
         .utc(message.createdTimestamp)
@@ -47,15 +55,19 @@ export class MessagesService {
     let fetchedMessages: Collection<string, Message>;
 
     do {
+      if (signal?.aborted) {
+        throw new FailedCommandException('Interaction cancelled.');
+      }
+
       if (remainingRequests == 0) {
-        console.log('Reached rate limit, waiting before continuing...');
+        this.logger.info('Reached rate limit, waiting before continuing...');
 
         await delay(1000);
         remainingRequests = this._apiReqLimit;
       }
 
       fetchedMessages = await channel.messages.fetch(options);
-      console.log(
+      this.logger.info(
         `Fetching messages in #${channel.name} channel before message ${options.before}...`,
       );
       options.before = fetchedMessages.last()?.id; // last message id
@@ -65,7 +77,7 @@ export class MessagesService {
 
       targetMessages.push(...filteredMessages.values());
 
-      console.log(
+      this.logger.info(
         `Fetched ${fetchedMessages.size}, pushed ${filteredMessages.size}`,
       );
     } while (
@@ -75,10 +87,20 @@ export class MessagesService {
     return targetMessages.reverse();
   }
 
-  async getChannelMessages(channel: TextBasedChannel, date: Dayjs) {
-    console.log(`Breaking messages data for ${channel.id} channel into chunks`);
+  async getChannelMessages(
+    channel: TextBasedChannel,
+    date: Dayjs,
+    signal?: AbortSignal,
+  ) {
+    this.logger.info(
+      `Breaking messages data for ${channel.id} channel into chunks`,
+    );
 
-    const messages = await this.fetchMessages(channel as TextChannel, date);
+    const messages = await this.fetchMessages(
+      channel as TextChannel,
+      date,
+      signal,
+    );
 
     const sanitize = async (message: Message) => {
       const contentWithoutTags = await this.formatDiscordTags(message);

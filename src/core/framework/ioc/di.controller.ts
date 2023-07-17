@@ -1,53 +1,73 @@
 import { InternalErrorException, isClass } from '../../common';
-
-type Instance = Partial<OnProviderInit>;
+import { InjectScope } from './constants';
+import { IScopeProxy, RequestScopeProxy, SingletoneScopeProxy } from './scope';
+import { ProviderInstance, ProviderToken } from './types';
 
 export class DIController {
-  private static readonly _tokensToProviders = new Map<ProviderToken, Type>();
+  private static readonly _proxyMap = new Map<ProviderToken, IScopeProxy>();
 
-  private static readonly _instances = new Map<ProviderToken, any>();
-
-  static runFactory() {
-    for (const [token, provider] of this._tokensToProviders) {
-      const instance: Instance = new provider();
-
-      const hookResult: MaybePromise<any> = instance.onProviderInit?.();
-      if (hookResult instanceof Promise) {
-        hookResult.catch((e) => console.error(e));
-      }
-
-      DIController._instances.set(token, instance);
-    }
-  }
-
-  static register(token: ProviderToken, provider: Type) {
-    if (DIController._instances.has(token)) {
+  static register<Token extends ProviderToken = ProviderToken>(
+    tokens: Token[],
+    provider: Type,
+    scope: ValueOf<typeof InjectScope>,
+  ) {
+    if (tokens.some((token) => DIController._proxyMap.has(token))) {
       throw new InternalErrorException(
-        `Duplicate provider: ${token.toString()}`,
+        `Duplicate provider: ${provider.constructor.name}`,
       );
     }
 
     if (!isClass(provider)) {
       throw new InternalErrorException(
-        `Provider without constructor: ${token.toString()}`,
+        `Provider without constructor: ${provider.constructor.name}`,
       );
     }
 
-    // const r = findCircularDependencies();
+    let proxyInstance: IScopeProxy;
+    switch (scope) {
+      case InjectScope.SINGLETONE:
+        proxyInstance = new SingletoneScopeProxy(provider);
+        break;
+      case InjectScope.REQUEST:
+        proxyInstance = new RequestScopeProxy(provider);
+        break;
+      default:
+        throw new InternalErrorException(
+          `Unrecognized scope '${scope}' of provider '${provider.constructor.name}'`,
+        );
+    }
 
-    this._tokensToProviders.set(token, provider);
+    tokens.forEach((token) => this._proxyMap.set(token, proxyInstance));
   }
 
   static getInstanceOf<
-    T extends ProviderToken = ProviderToken,
-    A = T extends new (...args) => any ? InstanceType<T> : any,
-  >(token: T): A {
-    if (!DIController._instances.has(token)) {
+    Token extends ProviderToken = ProviderToken,
+    Provider = ProviderInstance<
+      Token extends new (...any) => any ? Token : any
+    >,
+  >(callerContext: ProviderInstance, token: Token): Provider {
+    if (!DIController._proxyMap.has(token)) {
       throw new InternalErrorException(
         `Requested provider is not found: ${token.toString()}`,
       );
     }
 
-    return DIController._instances.get(token);
+    const proxy = DIController._proxyMap.get(token);
+
+    return proxy.resolve(callerContext);
+  }
+
+  static getScope<Token extends ProviderToken = ProviderToken>(
+    token: Token,
+  ): ValueOf<typeof InjectScope> {
+    const proxy = DIController._proxyMap.get(token);
+    if (proxy instanceof SingletoneScopeProxy) {
+      return InjectScope.SINGLETONE;
+    } else if (proxy instanceof RequestScopeProxy) {
+      return InjectScope.REQUEST;
+    }
+    throw new InternalErrorException(
+      `Unrecognized scope for proxy instance '${proxy}'`,
+    );
   }
 }

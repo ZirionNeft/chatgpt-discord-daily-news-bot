@@ -4,77 +4,59 @@ import {
   ButtonBuilder,
   CommandInteraction,
   GuildMember,
+  GuildTextBasedChannel,
 } from 'discord.js';
 import {
-  BaseInteractor,
   ConfigService,
-  FailedCommandException,
+  DiscordInteractor,
   getArgument,
   Inject,
   Interactor,
-  InvalidDateFormatException,
   LinkCommand,
   Provider,
+  Request,
+  RequestWrapper,
   Scheduled,
   TimeService,
 } from '../../../../core';
-import { BotClient } from '../../bot.client';
-import { CancelDailyNewsCommand } from '../cancel/cancel-daily-news.command';
+import discordActionIdFactory from '../../../../core/bot/discord/discord-action-id.factory';
+import {
+  InsufficientPermissionsException,
+  InvalidDateFormatException,
+} from '../../exceptions';
+import { MystAIBot } from '../../myst-ai-bot.client';
+import { CancelDailyNewsCommand } from '../cancel';
 import { DATE_FORMAT } from '../daily-news.constants';
 import { DailyNewsCommand } from './daily-news.command';
 
 @Provider()
 @Interactor()
-export class DailyNewsInteractor extends BaseInteractor {
+export class DailyNewsInteractor extends DiscordInteractor {
   @Inject(DailyNewsCommand)
-  @LinkCommand('handleDailyNews')
+  @LinkCommand('handleDailyNews', { concurrent: 1, scopes: ['text'] })
   private readonly dailyNewsCommand: DailyNewsCommand;
 
   @Inject(CancelDailyNewsCommand)
   private readonly cancelDailyNewsCommand: CancelDailyNewsCommand;
 
-  @Inject(BotClient)
-  private readonly botClient: BotClient;
+  @Inject(MystAIBot)
+  private readonly botClient: MystAIBot;
 
   @Inject(ConfigService)
   private readonly configService: ConfigService;
 
-  async handleDailyNews(interaction: CommandInteraction) {
-    if (!interaction.guild) {
-      await interaction.reply({
-        content: 'This command can only be used in a server.',
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const dateArg = getArgument<string>(interaction, 'date');
+  async handleDailyNews(request: RequestWrapper<CommandInteraction>) {
+    const dateArg = getArgument<string>(request, 'date');
     let date = TimeService.timestamp();
     if (dateArg) {
-      try {
-        date = TimeService.resolveFormat(dateArg, DATE_FORMAT);
-      } catch (e) {
-        if (e instanceof InvalidDateFormatException) {
-          await interaction.reply({
-            content: e.message,
-            ephemeral: true,
-          });
-          return;
-        }
-
-        console.error(e);
-
-        // TODO: move to BotInteractionException with child classes
-        await interaction.reply({
-          content: 'Something went wrong',
-          ephemeral: true,
-        });
-        return;
+      date = TimeService.resolveFormat(dateArg, DATE_FORMAT);
+      if (!date.isValid()) {
+        throw new InvalidDateFormatException(date, DATE_FORMAT);
       }
     }
 
     if (date.isAfter(TimeService.timestamp(), 'd')) {
-      await interaction.reply({
+      await request.reply({
         content: 'Date should be today or before.',
         ephemeral: true,
       });
@@ -82,35 +64,30 @@ export class DailyNewsInteractor extends BaseInteractor {
     }
 
     const channelId =
-      getArgument<string>(interaction, 'channel') ?? interaction.channelId;
+      getArgument<string>(request, 'channel') ?? request.channelId;
 
-    const targetChannel = interaction.guild.channels.cache.get(channelId);
-    if (!targetChannel?.isTextBased()) {
-      await interaction.reply({ content: 'Invalid channel.', ephemeral: true });
-      return;
-    }
+    const targetChannel = request.guild.channels.cache.get(
+      channelId,
+    ) as GuildTextBasedChannel;
 
     if (
       !targetChannel
-        .permissionsFor(interaction.member as GuildMember)
+        .permissionsFor(request.member as GuildMember)
         .has('ViewChannel')
     ) {
-      await interaction.reply({
-        content: 'You are not permitted to see this channel.',
-        ephemeral: true,
-      });
-      return;
+      throw new InsufficientPermissionsException();
     }
 
+    // TODO: move check for bot permissions to discord interactor
     if (
       !targetChannel
-        .permissionsFor(interaction.guild.client.user)
+        .permissionsFor(request.guild.client.user)
         .has(['ViewChannel', 'SendMessages']) ||
-      !interaction.channel
-        .permissionsFor(interaction.guild.client.user)
+      !request.channel
+        .permissionsFor(request.guild.client.user)
         .has('SendMessages')
     ) {
-      await interaction.reply({
+      await request.reply({
         content:
           "I'm not have permissions to see and/or write in this channel.",
         ephemeral: true,
@@ -118,55 +95,28 @@ export class DailyNewsInteractor extends BaseInteractor {
       return;
     }
 
-    // if (this.command.isRunning) {
-    //   await interaction.reply({
-    //     content: 'Command is running already, try a bit later',
-    //     ephemeral: true,
-    //   });
-    //   return;
-    // }
-
-    console.log(
+    this.logger.info(
       `Starting daily news command handling for channel ${targetChannel} and date ${date.toISOString()}`,
     );
 
-    try {
-      const row = new ActionRowBuilder<ButtonBuilder>().setComponents(
-        this.cancelDailyNewsCommand.actionBuilder,
-      );
+    const row = new ActionRowBuilder<ButtonBuilder>().setComponents(
+      this.cancelDailyNewsCommand.actionBuilder,
+    );
 
-      await interaction.reply({
-        content: 'Asking for ChatGPT...',
-        components: [row],
-        ephemeral: true,
-      });
+    await request.reply({
+      content: 'Asking for ChatGPT...',
+      components: [row],
+      ephemeral: true,
+    });
 
-      await this.dailyNewsCommand.run(interaction.channel, targetChannel, date);
-
-      await interaction.deleteReply();
-    } catch (e) {
-      console.error(e);
-
-      let content = 'Error processing request.';
-      if (e instanceof FailedCommandException) {
-        content = e.message;
-      }
-      if (interaction.isRepliable()) {
-        interaction
-          .editReply({
-            content,
-            components: [],
-          })
-          .catch(console.error);
-      }
-    }
+    await this.dailyNewsCommand.run(request, targetChannel, date);
   }
 
-  // TODO: unbound context
-  @Scheduled('0 21 * * *')
+  @Scheduled(DailyNewsInteractor, '0 21 * * *')
   async runSchedulerTask() {
-    console.log('Scheduled Daily News task running');
+    this.logger.info('Scheduled Daily News task running');
 
+    // TODO: validate bot permissions for every channel
     const targetChannels = this.configService
       .get<string>('GUILD_SCHEDULED_CHANNELS', '')
       .split(',');
@@ -175,16 +125,22 @@ export class DailyNewsInteractor extends BaseInteractor {
 
     for (const channelId of targetChannels) {
       const channel = guild.channels.cache.get(channelId);
+      // TODO: move validation to another layer (before command run?), also from discord interactor
       if (!channel?.isTextBased()) {
         continue;
       }
 
       try {
-        await this.dailyNewsCommand.run(channel, channel, dayjs.utc());
+        const requestLike = Request.wrap(
+          { channel } as any,
+          discordActionIdFactory,
+        );
 
-        console.log(`Message successfully sent to #${channel.name}`);
+        await this.dailyNewsCommand.run(requestLike, channel, dayjs.utc());
+
+        this.logger.info(`Message successfully sent to #${channel.name}`);
       } catch (e) {
-        console.error(e);
+        this.logger.error(e);
       }
     }
   }

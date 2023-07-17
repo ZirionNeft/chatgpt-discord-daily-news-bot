@@ -1,4 +1,5 @@
-import { BaseInteractor } from '../interactor.abstract';
+import { ProviderToken } from '../../ioc';
+import { BaseInteractor } from '../base-interactor.abstract';
 import { InteractorsManager } from '../interactors.manager';
 
 export function Interactor(token?: ProviderToken) {

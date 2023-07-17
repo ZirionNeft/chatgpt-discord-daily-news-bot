@@ -14,17 +14,11 @@ export abstract class BaseCommand<
 
   private _actionBuilder: Builder;
 
-  private _isRunning = false;
-
   get actionBuilder() {
     if (!this._actionBuilder) {
       this._actionBuilder = this.componentBuilderFactory();
     }
     return this._actionBuilder;
-  }
-
-  get isRunning() {
-    return this._isRunning;
   }
 
   async run(..._args: any[]) {

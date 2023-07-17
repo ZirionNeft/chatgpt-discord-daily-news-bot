@@ -1,10 +1,12 @@
+import { Logger } from '../../../logger';
 import { DIController } from '../di.controller';
+import { ProviderInstance, ProviderToken } from '../types';
 
 export function Inject<TokenType extends ProviderToken = ProviderToken>(
   token: TokenType,
 ) {
   return function <
-    This,
+    This extends ProviderInstance,
     ActualValue = TokenType extends new (...args) => any
       ? InstanceType<TokenType>
       : any,
@@ -17,14 +19,16 @@ export function Inject<TokenType extends ProviderToken = ProviderToken>(
       value: GotValue,
     ) {
       if (value) {
-        console.warn(
+        Logger.warn(
           `Provider of target '${
             this.constructor.name
           }.${_context.name.toString()}' already have value and not have been injected`,
+          'Inject',
         );
         return value;
       }
-      return DIController.getInstanceOf(token);
+
+      return DIController.getInstanceOf(this, token);
     };
   };
 }

@@ -3,13 +3,17 @@ import {
   ConfigService,
   Inject,
   InternalErrorException,
+  Logger,
   Provider,
+  ProviderInstance,
   template,
 } from '../../core';
 import chatGptConfig from './chatgpt.config.js';
 
 @Provider()
-export class ChatGPTClient implements OnProviderInit {
+export class ChatGPTClient implements ProviderInstance {
+  private readonly logger = new Logger(this.constructor.name);
+
   @Inject(ConfigService)
   private readonly configService: ConfigService;
 
@@ -35,7 +39,7 @@ export class ChatGPTClient implements OnProviderInit {
 
     const systemMessage = template(chatGptConfig.systemMessage, language);
 
-    console.info('System message is:', systemMessage);
+    this.logger.info('System message is:', systemMessage);
 
     const nodeEnv = this.configService.get('NODE_ENV', 'production');
 
@@ -51,7 +55,7 @@ export class ChatGPTClient implements OnProviderInit {
       maxModelTokens,
     });
 
-    console.info(
+    this.logger.info(
       `GPT Client created for model '${model}', cap tokens is ${maxModelTokens}, with temp ${temperature}`,
     );
   }
