@@ -1,4 +1,3 @@
-export * from './discord';
 export * from './cut-url-from-string';
 export * from './delay';
 export * from './find-circular-dependencies';

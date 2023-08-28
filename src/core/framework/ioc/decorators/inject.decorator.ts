@@ -1,5 +1,5 @@
 import { Logger } from '../../../logger';
-import { DIController } from '../di.controller';
+import { DIController } from '../DiController';
 import { ProviderInstance, ProviderToken } from '../types';
 
 export function Inject<TokenType extends ProviderToken = ProviderToken>(
@@ -7,19 +7,16 @@ export function Inject<TokenType extends ProviderToken = ProviderToken>(
 ) {
   return function <
     This extends ProviderInstance,
-    ActualValue = TokenType extends new (...args) => any
+    ActualValue = TokenType extends new () => any
       ? InstanceType<TokenType>
       : any,
-  >(
-    _target: undefined,
-    _context: ClassFieldDecoratorContext<This, ActualValue>,
-  ) {
+  >(_target: any, _context: ClassFieldDecoratorContext<This, ActualValue>) {
     return function <GotValue extends ActualValue>(
       this: This,
       value: GotValue,
     ) {
       if (value) {
-        Logger.warn(
+        Logger.verbose(
           `Provider of target '${
             this.constructor.name
           }.${_context.name.toString()}' already have value and not have been injected`,
@@ -28,7 +25,7 @@ export function Inject<TokenType extends ProviderToken = ProviderToken>(
         return value;
       }
 
-      return DIController.getInstanceOf(this, token);
+      return DIController.getInstanceOf(token);
     };
   };
 }

@@ -1,5 +1,13 @@
-export type RequestWrapper<T extends object = object> = T & {
-  get requestId(): string;
+import { UUID } from 'crypto';
+import { RequestProvider } from '../interactor';
+import { RequestMetadata } from './constants';
 
-  get actionId(): string;
-};
+export interface IRequestMetadata {
+  id: UUID;
+  actionId: string;
+  provider: ValueOf<typeof RequestProvider>;
+}
+
+export interface RequestAttributes {
+  readonly [RequestMetadata]: IRequestMetadata;
+}

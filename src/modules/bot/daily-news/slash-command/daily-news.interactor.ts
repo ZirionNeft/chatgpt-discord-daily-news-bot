@@ -2,7 +2,7 @@ import dayjs from 'dayjs';
 import {
   ActionRowBuilder,
   ButtonBuilder,
-  CommandInteraction,
+  ChatInputCommandInteraction,
   GuildMember,
   GuildTextBasedChannel,
 } from 'discord.js';
@@ -12,28 +12,32 @@ import {
   getArgument,
   Inject,
   Interactor,
-  LinkCommand,
-  Provider,
   Request,
-  RequestWrapper,
+  RequestProvider,
   Scheduled,
   TimeService,
+  WrappedRequest,
 } from '../../../../core';
-import discordActionIdFactory from '../../../../core/bot/discord/discord-action-id.factory';
 import {
   InsufficientPermissionsException,
   InvalidDateFormatException,
 } from '../../exceptions';
 import { MystAIBot } from '../../myst-ai-bot.client';
 import { CancelDailyNewsCommand } from '../cancel';
-import { DATE_FORMAT } from '../daily-news.constants';
+import {
+  DailyNewsSlashCommandName,
+  DATE_FORMAT,
+} from '../daily-news.constants';
 import { DailyNewsCommand } from './daily-news.command';
 
-@Provider()
-@Interactor()
-export class DailyNewsInteractor extends DiscordInteractor {
+@Interactor({
+  actionId: DailyNewsSlashCommandName,
+  requestProvider: RequestProvider.DISCORD,
+})
+export class DailyNewsInteractor<
+  Request extends ChatInputCommandInteraction = ChatInputCommandInteraction,
+> extends DiscordInteractor<Request> {
   @Inject(DailyNewsCommand)
-  @LinkCommand('handleDailyNews', { concurrent: 1, scopes: ['text'] })
   private readonly dailyNewsCommand: DailyNewsCommand;
 
   @Inject(CancelDailyNewsCommand)
@@ -45,10 +49,11 @@ export class DailyNewsInteractor extends DiscordInteractor {
   @Inject(ConfigService)
   private readonly configService: ConfigService;
 
-  async handleDailyNews(request: RequestWrapper<CommandInteraction>) {
+  async handle(request: WrappedRequest<Request>) {
     const dateArg = getArgument<string>(request, 'date');
     let date = TimeService.timestamp();
     if (dateArg) {
+      // TODO: Date like 12.05.2023 not having to throw
       date = TimeService.resolveFormat(dateArg, DATE_FORMAT);
       if (!date.isValid()) {
         throw new InvalidDateFormatException(date, DATE_FORMAT);
@@ -99,8 +104,13 @@ export class DailyNewsInteractor extends DiscordInteractor {
       `Starting daily news command handling for channel ${targetChannel} and date ${date.toISOString()}`,
     );
 
+    const selector = Request.getSelector(request);
+    const buttonBuilder = this.commandsStorage
+      .get(selector)
+      .builder(this.cancelDailyNewsCommand.actionId) as ButtonBuilder;
+
     const row = new ActionRowBuilder<ButtonBuilder>().setComponents(
-      this.cancelDailyNewsCommand.actionBuilder,
+      buttonBuilder,
     );
 
     await request.reply({
@@ -112,7 +122,7 @@ export class DailyNewsInteractor extends DiscordInteractor {
     await this.dailyNewsCommand.run(request, targetChannel, date);
   }
 
-  @Scheduled(DailyNewsInteractor, '0 21 * * *')
+  @Scheduled('0 21 * * *')
   async runSchedulerTask() {
     this.logger.info('Scheduled Daily News task running');
 
@@ -131,12 +141,11 @@ export class DailyNewsInteractor extends DiscordInteractor {
       }
 
       try {
-        const requestLike = Request.wrap(
+        await this.dailyNewsCommand.run(
           { channel } as any,
-          discordActionIdFactory,
+          channel,
+          dayjs.utc(),
         );
-
-        await this.dailyNewsCommand.run(requestLike, channel, dayjs.utc());
 
         this.logger.info(`Message successfully sent to #${channel.name}`);
       } catch (e) {

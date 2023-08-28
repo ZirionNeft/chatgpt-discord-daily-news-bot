@@ -1,5 +1,10 @@
-import { Provider } from '../../core';
-import { DiscordBotClient } from '../../core/bot';
+import { DiscordBotClient, Provider } from '../../core';
 
 @Provider()
-export class MystAIBot extends DiscordBotClient {}
+export class MystAIBot extends DiscordBotClient {
+  constructor() {
+    super({
+      intents: ['Guilds', 'GuildMessages'],
+    });
+  }
+}

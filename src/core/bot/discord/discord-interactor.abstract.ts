@@ -1,29 +1,37 @@
 import { Interaction } from 'discord.js';
-import { InternalErrorException } from '../../common';
 import {
   BaseInteractor,
+  CommandNotFoundException,
   CommandScope,
+  CommandsStorage,
   ConcurrentRunException,
   FailedCommandException,
-  Provider,
-  RequestWrapper,
+  Inject,
+  InteractorsManager,
+  Request,
+  WrappedRequest,
 } from '../../framework';
 import { Logger } from '../../logger';
 
-@Provider()
-export class DiscordInteractor<
+export abstract class DiscordInteractor<
   Request extends Interaction = Interaction,
 > extends BaseInteractor<Request> {
   protected readonly logger = new Logger(this.constructor.name);
 
-  async bootstrap(request: RequestWrapper<Request>) {
-    const actionId = request.actionId;
+  @Inject(CommandsStorage)
+  protected readonly commandsStorage: CommandsStorage;
 
-    if (this.commandsLinkMap.has(actionId)) {
-      const {
-        handlerName,
-        options: { concurrent, scopes },
-      } = this.commandsLinkMap.get(actionId);
+  @Inject(InteractorsManager)
+  protected readonly interactorsManager: InteractorsManager;
+
+  async bootstrap(request: WrappedRequest<Request>) {
+    const requestSelector = Request.getSelector(request);
+
+    this.interactorsManager.getOrThrow(requestSelector);
+
+    const commandMetadata = this.commandsStorage.get(requestSelector);
+    if (commandMetadata) {
+      const { concurrent, scopes } = commandMetadata;
 
       if (!this.isValidScope(request, scopes)) {
         throw new FailedCommandException(
@@ -31,14 +39,7 @@ export class DiscordInteractor<
         );
       }
 
-      const handler = Reflect.get(this, handlerName) as (
-        request: RequestWrapper<Request>,
-      ) => MaybePromise<any>;
-
-      const trackedCount = this.commandsTracker.requestCount([
-        handlerName,
-        actionId,
-      ]);
+      const trackedCount = this.commandsTracker.requestCount(requestSelector);
       if (
         (typeof concurrent === 'number' && trackedCount >= concurrent) ||
         !concurrent
@@ -46,10 +47,10 @@ export class DiscordInteractor<
         throw new ConcurrentRunException();
       }
 
-      this.commandsTracker.trackRequest([handlerName, actionId], request);
+      this.commandsTracker.trackRequest(request);
 
       try {
-        await handler.call(this, request);
+        await this.handle(request);
 
         if (request.isRepliable() && request.replied) {
           await request.deleteReply();
@@ -79,11 +80,10 @@ export class DiscordInteractor<
           }
         }
       } finally {
-        this.commandsTracker.forgetRequest([handlerName, actionId], request);
+        this.commandsTracker.forgetRequest(request);
       }
-    } else {
-      throw new InternalErrorException('Action not implemented');
     }
+    throw new CommandNotFoundException(requestSelector);
   }
 
   private isValidScope(request: Request, scopes: CommandScope[]) {

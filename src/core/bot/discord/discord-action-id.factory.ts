@@ -1,9 +1,8 @@
 import { Interaction } from 'discord.js';
-import { InternalErrorException } from '../../common';
-import { ActionIdFactory, RequestWrapper } from '../../framework';
+import { ActionIdFactory, WrappedRequest } from '../../framework';
 
 const factory: ActionIdFactory<Interaction> = (
-  request: RequestWrapper<Interaction>,
+  request: WrappedRequest<Interaction>,
 ) => {
   let actionId: string;
 
@@ -12,7 +11,7 @@ const factory: ActionIdFactory<Interaction> = (
   } else if (request.isMessageComponent()) {
     actionId = request.customId;
   } else {
-    throw new InternalErrorException('Unresolvable action inside interactor');
+    throw new Error('Unresolvable action inside interactor');
   }
 
   return actionId;

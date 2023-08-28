@@ -1,7 +1,9 @@
 export * from './constants';
 export * from './types';
+export * from './interfaces';
 
-export * from './scope';
+export * from './scopes';
+export * from './exceptions';
 
-export * from './di.controller';
+export * from './DiController';
 export * from './decorators';

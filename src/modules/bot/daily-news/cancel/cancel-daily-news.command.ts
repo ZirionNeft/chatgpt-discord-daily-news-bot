@@ -1,26 +1,35 @@
-import { ButtonStyle } from 'discord-api-types/payloads/v10';
-import { ButtonBuilder, ButtonInteraction } from 'discord.js';
+import { ButtonStyle } from 'discord-api-types/v10';
+import { ButtonBuilder } from 'discord.js';
 import {
-  BaseCommand,
+  Command,
+  ICommand,
   Inject,
-  Provider,
-  RequestWrapper,
+  InjectScope,
+  RequestProvider,
 } from '../../../../core';
 import { AbortControllerProvider } from '../abort-controller.provider';
 import { CancelDailyNewsComponentId } from '../daily-news.constants';
 
-@Provider()
-export class CancelDailyNewsCommand extends BaseCommand<ButtonBuilder> {
-  readonly actionId = CancelDailyNewsComponentId;
-
+// TODO: Request Provider independence - move out from decorator options to another place discord-specific logic
+@Command<ButtonBuilder>({
+  actionId: CancelDailyNewsComponentId,
+  builder: (actionId) =>
+    new ButtonBuilder()
+      .setCustomId(actionId)
+      .setLabel('Cancel')
+      .setStyle(ButtonStyle.Danger),
+  provider: RequestProvider.DISCORD,
+  providerOptions: { scope: InjectScope.REQUEST },
+})
+export class CancelDailyNewsCommand implements ICommand {
   @Inject(AbortControllerProvider)
   private readonly abortController: AbortControllerProvider;
 
-  constructor() {
-    super();
-  }
-
   private _inProcessComponentBuilder: ButtonBuilder;
+
+  get actionId() {
+    return CancelDailyNewsComponentId;
+  }
 
   get inProcessComponentBuilder() {
     if (!this._inProcessComponentBuilder) {
@@ -29,7 +38,7 @@ export class CancelDailyNewsCommand extends BaseCommand<ButtonBuilder> {
     return this._inProcessComponentBuilder;
   }
 
-  async run(_request: RequestWrapper<ButtonInteraction>): Promise<void> {
+  async run(): Promise<void> {
     this.abortController.abort();
   }
 
@@ -38,13 +47,6 @@ export class CancelDailyNewsCommand extends BaseCommand<ButtonBuilder> {
       .setCustomId('cancelling')
       .setLabel('Cancelling...')
       .setDisabled(true)
-      .setStyle(ButtonStyle.Danger);
-  }
-
-  protected componentBuilderFactory() {
-    return new ButtonBuilder()
-      .setCustomId(this.actionId)
-      .setLabel('Cancel')
       .setStyle(ButtonStyle.Danger);
   }
 }

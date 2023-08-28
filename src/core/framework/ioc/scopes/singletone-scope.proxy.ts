@@ -15,6 +15,9 @@ export class SingletoneScopeProxy<ProviderToken extends Type>
 
   resolve(): ProviderInstance<ProviderToken> {
     if (this.instance) {
+      this.logger.verbose(
+        `Provider instance resolved for ${this.provider.name} - return already existing.`,
+      );
       return this.instance;
     }
 
@@ -26,6 +29,10 @@ export class SingletoneScopeProxy<ProviderToken extends Type>
     }
 
     this.instance = instance;
+
+    this.logger.verbose(
+      `Provider instance resolved for ${this.provider.name} - created the new one.`,
+    );
 
     return instance;
   }

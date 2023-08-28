@@ -2,7 +2,6 @@ import { ChatGPTAPI } from 'chatgpt';
 import {
   ConfigService,
   Inject,
-  InternalErrorException,
   Logger,
   Provider,
   ProviderInstance,
@@ -21,7 +20,7 @@ export class ChatGPTClient implements ProviderInstance {
 
   get provider() {
     if (!this._client) {
-      throw new InternalErrorException('Chat GPT client is no initialized');
+      throw new Error('Chat GPT client is no initialized');
     }
 
     return this._client;

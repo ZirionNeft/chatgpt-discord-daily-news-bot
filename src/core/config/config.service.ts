@@ -1,6 +1,5 @@
 import { config } from 'dotenv';
 import * as process from 'process';
-import { InternalErrorException } from '../common';
 import { Provider } from '../framework';
 
 @Provider()
@@ -22,9 +21,7 @@ export class ConfigService {
     const value = this._config[key];
 
     if (typeof value === 'undefined') {
-      throw new InternalErrorException(
-        `Environment variable '${key}' is undefined`,
-      );
+      throw new Error(`Environment variable '${key}' is undefined`);
     }
 
     return value;

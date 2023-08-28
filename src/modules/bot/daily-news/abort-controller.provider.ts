@@ -1,6 +1,6 @@
 import { InjectScope, Provider } from '../../../core';
 
-@Provider(AbortControllerProvider, InjectScope.REQUEST)
+@Provider({ scope: InjectScope.REQUEST })
 export class AbortControllerProvider implements AbortController {
   private readonly abortController = new AbortController();
 

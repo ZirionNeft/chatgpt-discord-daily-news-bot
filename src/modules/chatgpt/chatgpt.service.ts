@@ -2,7 +2,7 @@ import { encode } from 'gpt-3-encoder';
 import {
   ConfigService,
   Inject,
-  InternalErrorException,
+  InjectScope,
   Logger,
   Provider,
   UseBackoff,
@@ -14,7 +14,7 @@ import { RequestAbortedException } from './exceptions';
 
 const BACKOFF_SEND_MESSAGE_TRIES = 3;
 
-@Provider()
+@Provider({ scope: InjectScope.REQUEST })
 export class ChatGPTService {
   private readonly logger = new Logger(this.constructor.name);
 
@@ -22,39 +22,30 @@ export class ChatGPTService {
   private readonly client: ChatGPTClient;
 
   @Inject(AbortControllerProvider)
-  private readonly abortController;
+  private readonly abortController: AbortControllerProvider;
 
   @Inject(ConfigService)
-  private readonly config;
+  private readonly config: ConfigService;
 
   async getCompletion(chunks: string[], date: string): Promise<string[]> {
-    try {
-      this.logger.info(`Sending message to ChatGPT for the date '${date}'`);
+    this.logger.info(`Sending message to ChatGPT for the date '${date}'`);
 
-      const completionParts: string[] = [];
+    const completionParts: string[] = [];
 
-      for (const chunk of chunks) {
-        try {
-          const response = await this.sendMessage(chunk);
+    for (const chunk of chunks) {
+      try {
+        const response = await this.sendMessage(chunk);
 
-          completionParts.push(response);
-        } catch (e) {
-          if (e.name === 'AbortError') {
-            throw e;
-          }
-          this.logger.error(e);
+        completionParts.push(response);
+      } catch (e) {
+        if (e.name === 'AbortError') {
+          throw new RequestAbortedException();
         }
+        this.logger.error(e);
       }
-
-      return completionParts;
-    } catch (e) {
-      if (e.name === 'AbortError') {
-        throw new RequestAbortedException();
-      }
-      this.logger.error(e);
-
-      throw new InternalErrorException(e.message);
     }
+
+    return completionParts;
   }
 
   @UseBackoff(BACKOFF_SEND_MESSAGE_TRIES, ['AbortError'])

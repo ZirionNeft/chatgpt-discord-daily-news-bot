@@ -7,24 +7,23 @@ import {
 } from 'discord.js';
 import { encode } from 'gpt-3-encoder';
 import {
-  BaseCommand,
   ChunkedData,
+  Command,
   ConfigService,
   delay,
   FailedCommandException,
   GptTokensStrategy,
+  ICommand,
   Inject,
-  InternalErrorException,
-  IRegistrableCommand,
+  InjectScope,
   Logger,
-  Provider,
-  RequestWrapper,
+  RequestProvider,
   template,
+  WrappedRequest,
 } from '../../../../core';
 import { ChatGPTService } from '../../../chatgpt';
 import botConfig from '../../bot.config';
 import { MessagesService } from '../../messages.service';
-import { MystAIBot } from '../../myst-ai-bot.client';
 import { AbortControllerProvider } from '../abort-controller.provider';
 
 import {
@@ -32,33 +31,11 @@ import {
   DISCORD_MESSAGE_CHUNK_PREFIX,
 } from '../daily-news.constants';
 
-@Provider()
-export class DailyNewsCommand
-  extends BaseCommand<SharedNameAndDescription>
-  implements IRegistrableCommand<SharedNameAndDescription>
-{
-  private readonly logger = new Logger(this.constructor.name);
-
-  readonly actionId = DailyNewsSlashCommandName;
-
-  @Inject(MessagesService)
-  private readonly messagesService: MessagesService;
-
-  @Inject(ChatGPTService)
-  private readonly chatGptService: ChatGPTService;
-
-  @Inject(ConfigService)
-  private readonly configService: ConfigService;
-
-  @Inject(MystAIBot)
-  private readonly botClient: MystAIBot;
-
-  @Inject(AbortControllerProvider)
-  private readonly abortController: AbortControllerProvider;
-
-  protected componentBuilderFactory() {
-    return new SlashCommandBuilder()
-      .setName(DailyNewsSlashCommandName)
+@Command<SharedNameAndDescription>({
+  actionId: DailyNewsSlashCommandName,
+  builder: (actionId) =>
+    new SlashCommandBuilder()
+      .setName(actionId)
       .setDescription(
         'Generate short digest of key topics for specific channels',
       )
@@ -73,11 +50,35 @@ export class DailyNewsCommand
           .setName('date')
           .setDescription('The date to fetch messages from (DD.MM.YY)')
           .setRequired(false),
-      );
+      ),
+  scopes: ['text'],
+  provider: RequestProvider.DISCORD,
+  concurrent: 1,
+  providerOptions: {
+    scope: InjectScope.REQUEST,
+  },
+})
+export class DailyNewsCommand implements ICommand {
+  private readonly logger = new Logger(this.constructor.name);
+
+  get actionId() {
+    return DailyNewsSlashCommandName;
   }
 
-  override async run(
-    { channel }: RequestWrapper<CommandInteraction>,
+  @Inject(MessagesService)
+  private readonly messagesService: MessagesService;
+
+  @Inject(ChatGPTService)
+  private readonly chatGptService: ChatGPTService;
+
+  @Inject(ConfigService)
+  private readonly configService: ConfigService;
+
+  @Inject(AbortControllerProvider)
+  private readonly abortController: AbortControllerProvider;
+
+  async run(
+    { channel }: WrappedRequest<CommandInteraction>,
     targetChannel: GuildTextBasedChannel,
     dateOption: Dayjs,
   ): Promise<void> {
@@ -89,9 +90,7 @@ export class DailyNewsCommand
 
     const chunkSize = gptModelTokens - gptCompletionTokens;
     if (chunkSize <= 0) {
-      throw new InternalErrorException(
-        `GPT chunk size is too low: ${chunkSize}`,
-      );
+      throw new Error(`GPT chunk size is too low: ${chunkSize}`);
     }
 
     const messages = await this.messagesService.getChannelMessages(
@@ -172,9 +171,5 @@ export class DailyNewsCommand
     }
 
     throw new FailedCommandException('Empty result');
-  }
-
-  async register() {
-    await this.botClient.registerAction(this);
   }
 }

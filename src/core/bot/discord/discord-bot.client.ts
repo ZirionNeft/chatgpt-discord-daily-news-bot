@@ -1,23 +1,27 @@
+import { SharedNameAndDescription } from '@discordjs/builders';
 import {
   Client,
   ClientEvents,
+  ClientOptions,
+  ComponentBuilder,
   Events,
   Interaction,
   SlashCommandBuilder,
 } from 'discord.js';
 import {
-  BaseCommand,
   ConfigService,
   Inject,
   InteractorsManager,
-  InternalErrorException,
   Listen,
   ListenerBounderService,
   ListenOnce,
   Logger,
   Request,
+  RequestProvider,
 } from '../../../core';
+import { CommandsStorage } from '../../framework';
 import discordActionIdFactory from './discord-action-id.factory';
+import { GuildNotFoundException } from './exceptions';
 import { IBotClient } from './interfaces';
 
 const EVENT_TARGET = 'DiscordBotClient';
@@ -28,12 +32,17 @@ export abstract class DiscordBotClient implements IBotClient<Client> {
   @Inject(ConfigService)
   private readonly configService: ConfigService;
 
+  @Inject(CommandsStorage)
+  private readonly commandsStorage: CommandsStorage;
+
   @Inject(InteractorsManager)
   private readonly interactorsManager: InteractorsManager;
 
-  readonly provider = new Client({
-    intents: ['Guilds', 'GuildMessages'],
-  });
+  readonly provider: Client;
+
+  constructor(options?: ClientOptions) {
+    this.provider = new Client(options);
+  }
 
   async login() {
     const token = this.configService.getOrThrow<string>('DISCORD_TOKEN');
@@ -47,19 +56,20 @@ export abstract class DiscordBotClient implements IBotClient<Client> {
   async ready() {
     this.logger.info('Bot is ready!');
 
-    const registeredIds = await this.interactorsManager.registerCommands();
+    const commands = this.commandsStorage.getAll();
+    for (const [actionId, meta] of commands) {
+      await this.registerAction(actionId, meta.builder(actionId));
+    }
 
-    this.logger.info('Registered action ids:', registeredIds.join());
+    this.logger.info('Registered action ids:', commands.map(([k]) => k).join());
   }
 
   @Listen<AsMapped<ClientEvents>>(EVENT_TARGET, Events.InteractionCreate)
   async interactionCreate(interaction: Interaction) {
     try {
-      const request = Request.wrap(interaction, discordActionIdFactory);
+      const request = DiscordBotClient.interactionToRequest(interaction);
 
-      const interactor = this.interactorsManager.resolve(request);
-
-      await interactor.bootstrap(request);
+      await this.interactorsManager.resolve(request);
     } catch (e) {
       this.logger.fatal(e);
     }
@@ -71,23 +81,21 @@ export abstract class DiscordBotClient implements IBotClient<Client> {
     const guild = await this.provider.guilds.fetch(guildId);
 
     if (!guild) {
-      throw new InternalErrorException(
-        `Guild with id '${guildId}' is not found`,
-      );
+      throw new GuildNotFoundException(guildId);
     }
 
     return guild;
   }
 
-  async registerAction({ actionBuilder, actionId }: BaseCommand) {
-    if (!actionId) {
-      throw new InternalErrorException('Action id is not defined');
-    }
-
+  private async registerAction<
+    Builder extends ComponentBuilder | SharedNameAndDescription =
+      | ComponentBuilder
+      | SharedNameAndDescription,
+  >(actionId: string, actionBuilder: Builder) {
     if (actionBuilder instanceof SlashCommandBuilder) {
       const guild = await this.getGuild();
 
-      const isCommandRegisteredInDiscord = await guild.commands.cache.find(
+      const isCommandRegisteredInDiscord = guild.commands.cache.find(
         (command) => command.name === actionId,
       );
 
@@ -95,5 +103,13 @@ export abstract class DiscordBotClient implements IBotClient<Client> {
         await guild.commands.create(actionBuilder);
       }
     }
+  }
+
+  static interactionToRequest(interaction: Interaction) {
+    return Request.wrap(
+      interaction,
+      RequestProvider.DISCORD,
+      discordActionIdFactory,
+    );
   }
 }

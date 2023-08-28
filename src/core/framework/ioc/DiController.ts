@@ -1,6 +1,19 @@
-import { InternalErrorException, isClass } from '../../common';
+import { isClass } from '../../common';
+import { RequestQueue } from '../request';
 import { InjectScope } from './constants';
-import { IScopeProxy, RequestScopeProxy, SingletoneScopeProxy } from './scope';
+import {
+  DuplicateProviderException,
+  ProviderNotFoundException,
+  ProviderWrongTypeException,
+  UnrecognizedScopeException,
+} from './exceptions';
+import {
+  DependencyContext,
+  IScopeProxy,
+  RequestDependencyContext,
+  RequestScopeProxy,
+  SingletoneScopeProxy,
+} from './scopes';
 import { ProviderInstance, ProviderToken } from './types';
 
 export class DIController {
@@ -12,15 +25,11 @@ export class DIController {
     scope: ValueOf<typeof InjectScope>,
   ) {
     if (tokens.some((token) => DIController._proxyMap.has(token))) {
-      throw new InternalErrorException(
-        `Duplicate provider: ${provider.constructor.name}`,
-      );
+      throw new DuplicateProviderException(provider);
     }
 
     if (!isClass(provider)) {
-      throw new InternalErrorException(
-        `Provider without constructor: ${provider.constructor.name}`,
-      );
+      throw new ProviderWrongTypeException(provider);
     }
 
     let proxyInstance: IScopeProxy;
@@ -32,9 +41,7 @@ export class DIController {
         proxyInstance = new RequestScopeProxy(provider);
         break;
       default:
-        throw new InternalErrorException(
-          `Unrecognized scope '${scope}' of provider '${provider.constructor.name}'`,
-        );
+        throw new UnrecognizedScopeException(scope, provider);
     }
 
     tokens.forEach((token) => this._proxyMap.set(token, proxyInstance));
@@ -45,29 +52,38 @@ export class DIController {
     Provider = ProviderInstance<
       Token extends new (...any) => any ? Token : any
     >,
-  >(callerContext: ProviderInstance, token: Token): Provider {
+  >(token: Token): Provider {
     if (!DIController._proxyMap.has(token)) {
-      throw new InternalErrorException(
-        `Requested provider is not found: ${token.toString()}`,
-      );
+      throw new ProviderNotFoundException(token);
     }
 
     const proxy = DIController._proxyMap.get(token);
 
-    return proxy.resolve(callerContext);
+    const scope = DIController.getScope(token);
+
+    const dependencyContext: DependencyContext | RequestDependencyContext = {
+      providerScope: scope,
+    };
+
+    if (scope === InjectScope.REQUEST) {
+      const requestQueue = this.getInstanceOf(RequestQueue);
+
+      [(dependencyContext as RequestDependencyContext).request] =
+        requestQueue.processing;
+    }
+
+    return proxy.resolve(dependencyContext);
   }
 
   static getScope<Token extends ProviderToken = ProviderToken>(
     token: Token,
-  ): ValueOf<typeof InjectScope> {
+  ): ValueOf<typeof InjectScope> | null {
     const proxy = DIController._proxyMap.get(token);
     if (proxy instanceof SingletoneScopeProxy) {
       return InjectScope.SINGLETONE;
     } else if (proxy instanceof RequestScopeProxy) {
       return InjectScope.REQUEST;
     }
-    throw new InternalErrorException(
-      `Unrecognized scope for proxy instance '${proxy}'`,
-    );
+    return null;
   }
 }

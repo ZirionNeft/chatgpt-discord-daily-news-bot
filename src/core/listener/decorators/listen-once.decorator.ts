@@ -1,5 +1,4 @@
 import { EventEmitter } from 'events';
-import { InternalErrorException } from '../../common';
 import { ListenerBounderService } from '../listener-bounder.service';
 
 export function ListenOnce<
@@ -11,9 +10,7 @@ export function ListenOnce<
     _context: ClassMethodDecoratorContext,
   ) {
     if (typeof _context.name === 'symbol') {
-      throw new InternalErrorException(
-        'Cannot decorate method of symbol target',
-      );
+      throw new Error('Cannot decorate method of symbol target');
     }
     ListenerBounderService.register(
       target,

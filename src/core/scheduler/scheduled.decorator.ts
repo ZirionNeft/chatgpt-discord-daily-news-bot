@@ -1,27 +1,26 @@
-import { InternalErrorException } from '../common';
 import { DIController, InjectScope } from '../framework';
 import { SchedulerService } from './scheduler.service';
 import { ScheduleTime } from './types';
 
-export function Scheduled(target: Type, time: ScheduleTime) {
+export function Scheduled(time: ScheduleTime) {
   return function actualDecorator(
     originalMethod: (...args: any[]) => any,
-    _context: ClassMethodDecoratorContext,
+    { addInitializer }: ClassMethodDecoratorContext,
   ) {
-    SchedulerService.addTask({
-      time,
-      handler: () => {
-        const scope = DIController.getScope(target);
-        if (scope !== InjectScope.SINGLETONE) {
-          throw new InternalErrorException(
-            `Scheduled decorator is possible only on request-scoped provider methods, but provider of '${target.name}' have '${scope}'`,
-          );
-        }
+    addInitializer(() => {
+      SchedulerService.addTask({
+        time,
+        handler: () => {
+          const scope = DIController.getScope(this.prototype);
+          if (scope !== InjectScope.SINGLETONE) {
+            throw new Error(
+              `Scheduled decorator is possible only on request-scoped provider methods, but provider of '${this.prototype.name}' have '${scope}'`,
+            );
+          }
 
-        const context = DIController.getInstanceOf(null, target);
-
-        return originalMethod.bind(context);
-      },
+          return originalMethod.bind(this);
+        },
+      });
     });
   };
 }

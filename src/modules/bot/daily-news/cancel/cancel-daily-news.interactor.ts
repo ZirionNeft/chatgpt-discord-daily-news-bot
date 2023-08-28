@@ -3,20 +3,23 @@ import {
   DiscordInteractor,
   Inject,
   Interactor,
-  LinkCommand,
-  Provider,
-  RequestWrapper,
+  RequestProvider,
+  WrappedRequest,
 } from '../../../../core';
+import { CancelDailyNewsComponentId } from '../daily-news.constants';
 import { CancelDailyNewsCommand } from './cancel-daily-news.command';
 
-@Provider()
-@Interactor()
-export class CancelDailyNewsInteractor extends DiscordInteractor {
+@Interactor({
+  actionId: CancelDailyNewsComponentId,
+  requestProvider: RequestProvider.DISCORD,
+})
+export class CancelDailyNewsInteractor<
+  Request extends ButtonInteraction = ButtonInteraction,
+> extends DiscordInteractor<Request> {
   @Inject(CancelDailyNewsCommand)
-  @LinkCommand('handleCancelDailyNews', { scopes: ['text'] })
   private readonly cancelDailyNewsCommand: CancelDailyNewsCommand;
 
-  async handleCancelDailyNews(request: RequestWrapper<ButtonInteraction>) {
+  async handle(request: WrappedRequest<Request>) {
     const row = new ActionRowBuilder<ButtonBuilder>().setComponents(
       this.cancelDailyNewsCommand.inProcessComponentBuilder,
     );
@@ -25,7 +28,7 @@ export class CancelDailyNewsInteractor extends DiscordInteractor {
       components: [row],
     });
 
-    await this.cancelDailyNewsCommand.run(request);
+    await this.cancelDailyNewsCommand.run();
 
     await request.followUp({
       content: 'Interaction cancelled.',
