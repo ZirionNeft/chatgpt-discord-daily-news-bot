@@ -1,5 +1,5 @@
 import { LogLevel } from './constants';
-import { ConsoleLogger } from './impl';
+import { ConsoleLogger, PinoLogger } from './impl';
 import { ILogger, LoggerOptions } from './interfaces';
 
 export class Logger implements ILogger {
@@ -11,6 +11,13 @@ export class Logger implements ILogger {
   }
 
   private static provider: ILogger;
+
+  static {
+    this.use({
+      factory: () => PinoLogger,
+      logLevel: LogLevel.VERBOSE,
+    });
+  }
 
   static use<ProviderOptions>(
     options: LoggerOptions<ProviderOptions> = {

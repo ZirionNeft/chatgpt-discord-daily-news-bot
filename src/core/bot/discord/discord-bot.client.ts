@@ -56,12 +56,12 @@ export abstract class DiscordBotClient implements IBotClient<Client> {
   async ready() {
     this.logger.info('Bot is ready!');
 
-    const commands = this.commandsStorage.getAll();
-    for (const [actionId, meta] of commands) {
-      await this.registerAction(actionId, meta.builder(actionId));
-    }
+    const commands = this.commandsStorage.getIterator();
+    for (const [selector, meta] of commands) {
+      await this.registerAction(meta.actionId, meta.builder(meta.actionId));
 
-    this.logger.info('Registered action ids:', commands.map(([k]) => k).join());
+      this.logger.info(`Registered command [${selector}]`);
+    }
   }
 
   @Listen<AsMapped<ClientEvents>>(EVENT_TARGET, Events.InteractionCreate)

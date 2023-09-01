@@ -17,7 +17,7 @@ import {
 import { ProviderInstance, ProviderToken } from './types';
 
 export class DIController {
-  private static readonly _proxyMap = new Map<ProviderToken, IScopeProxy>();
+  private static readonly _proxyMap = new WeakMap<ProviderToken, IScopeProxy>();
 
   static register<Token extends ProviderToken = ProviderToken>(
     tokens: Token[],
@@ -68,8 +68,8 @@ export class DIController {
     if (scope === InjectScope.REQUEST) {
       const requestQueue = this.getInstanceOf(RequestQueue);
 
-      [(dependencyContext as RequestDependencyContext).request] =
-        requestQueue.processing;
+      (dependencyContext as RequestDependencyContext).request =
+        requestQueue.processing?.[0] ?? null;
     }
 
     return proxy.resolve(dependencyContext);

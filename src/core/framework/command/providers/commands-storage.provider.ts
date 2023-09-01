@@ -28,7 +28,7 @@ export class CommandsStorage {
     return this.commandsMetadata.get(selector);
   }
 
-  getAll() {
-    return [...this.commandsMetadata.entries()];
+  getIterator() {
+    return this.commandsMetadata.entries();
   }
 }

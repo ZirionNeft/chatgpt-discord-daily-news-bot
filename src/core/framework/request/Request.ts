@@ -6,7 +6,7 @@ import { IRequestMetadata, RequestAttributes } from './interfaces';
 import { ActionIdFactory, RequestSelector, WrappedRequest } from './types';
 
 export class Request {
-  static isRequest(target: any) {
+  static isInstance(target: any) {
     return (
       target &&
       typeof target === 'object' &&
@@ -14,15 +14,23 @@ export class Request {
     );
   }
 
+  static isType(target: any) {
+    return (
+      target &&
+      typeof target === 'function' &&
+      Reflect.has(target, RequestMetadata)
+    );
+  }
+
   static getMetadata(target: any): IRequestMetadata | null {
-    if (this.isRequest(target)) {
+    if (this.isInstance(target)) {
       return Reflect.get(target, RequestMetadata);
     }
     return null;
   }
 
   static getSelector(target: any): RequestSelector | null {
-    if (this.isRequest(target)) {
+    if (this.isInstance(target)) {
       const { provider, actionId } = Reflect.get(
         target,
         RequestMetadata,
@@ -72,6 +80,8 @@ export class Request {
         return request as RequestAttributes;
       }
     }
+
+    WrappedRequest[RequestMetadata] = request[RequestMetadata];
 
     return WrappedRequest as Type;
   }

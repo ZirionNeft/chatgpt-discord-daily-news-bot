@@ -38,6 +38,7 @@ export class RequestQueue {
         this.#logger.error(e);
       }
     }
+    this.#processing = null;
   }
 
   *#requestLoop() {

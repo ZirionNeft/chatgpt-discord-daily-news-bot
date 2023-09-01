@@ -1,4 +1,4 @@
-export type ProviderToken<T = any> = symbol | string | Type<T>;
+export type ProviderToken<T = any> = Symbol | String | Type<T>;
 
 export interface OnProviderInit {
   onProviderInit(): MaybePromise<any>;

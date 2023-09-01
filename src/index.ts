@@ -1,19 +1,7 @@
-import {
-  ConfigService,
-  DIController,
-  Logger,
-  LogLevel,
-  PinoLogger,
-  TimeService,
-} from './core';
+import { ConfigService, DIController, Logger, TimeService } from './core';
 import { MystAIBot } from './modules';
 
 async function bootstrap() {
-  Logger.use({
-    factory: () => PinoLogger,
-    logLevel: LogLevel.INFO,
-  });
-
   Logger.info(`PID: ${process.pid}`);
 
   const configService = DIController.getInstanceOf(ConfigService);

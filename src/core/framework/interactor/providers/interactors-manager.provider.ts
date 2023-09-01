@@ -7,7 +7,6 @@ import {
 } from '../../request';
 import { BaseInteractor } from '../base-interactor.abstract';
 import { ActionNotFoundException } from '../exceptions';
-import { ActionWrongTargetException } from '../exceptions/action-wrong-target.exception';
 
 @Provider()
 export class InteractorsManager {
@@ -33,9 +32,9 @@ export class InteractorsManager {
       throw new ActionNotFoundException(selector);
     }
 
-    if (!(this instanceof interactorToken)) {
-      throw new ActionWrongTargetException(selector, interactorToken);
-    }
+    // if (!(this instanceof interactorToken)) {
+    //   throw new ActionWrongTargetException(selector, interactorToken);
+    // }
 
     return interactorToken;
   }

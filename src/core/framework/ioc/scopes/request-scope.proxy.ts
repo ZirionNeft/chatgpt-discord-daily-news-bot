@@ -1,5 +1,5 @@
 import { Logger } from '../../../logger';
-import { WrappedRequest } from '../../request';
+import { Request, WrappedRequest } from '../../request';
 import { RequestUndefinedException } from '../exceptions';
 import { ProviderInstance } from '../types';
 import { IScopeProxy, RequestDependencyContext } from './interfaces';
@@ -10,7 +10,7 @@ export class RequestScopeProxy<Provider extends Type>
   private readonly logger: Logger;
 
   private readonly requestProviders = new WeakMap<
-    WrappedRequest,
+    WrappedRequest | Symbol,
     ProviderInstance<Provider>
   >();
 
@@ -19,18 +19,20 @@ export class RequestScopeProxy<Provider extends Type>
   }
 
   resolve({ request }: RequestDependencyContext): ProviderInstance<Provider> {
-    if (!request) {
+    if (!request && !Request.isType(this.provider)) {
       throw new RequestUndefinedException();
     }
 
-    const resolvedDependency = this.requestProviders.get(request);
-
-    if (!resolvedDependency) {
+    if (!this.requestProviders.has(request)) {
       const instance: ProviderInstance<Provider> = new this.provider();
 
       const hookResult: MaybePromise<any> = instance.onProviderInit?.();
       if (hookResult instanceof Promise) {
         hookResult.catch((e) => this.logger.error(e));
+      }
+
+      if (Request.isType(this.provider)) {
+        request = instance as unknown as WrappedRequest; // TODO: change to Symbol?
       }
 
       this.requestProviders.set(request, instance);
@@ -46,6 +48,6 @@ export class RequestScopeProxy<Provider extends Type>
       `Request provider instance resolved for ${this.provider.name} - return already existing.`,
     );
 
-    return resolvedDependency;
+    return this.requestProviders.get(request);
   }
 }
