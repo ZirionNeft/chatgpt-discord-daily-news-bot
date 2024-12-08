@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - "main"
-  workflow_dispatch: # Enables manual triggering of the workflow
 
 jobs:
   main:
