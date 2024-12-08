@@ -13,7 +13,7 @@ jobs:
       url: https://github.com
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # UTILITIES
       - name: Extract branch name
@@ -58,13 +58,13 @@ jobs:
           BRANCH_NAME: ${{ steps.extract-branch.outputs.branch-name }}
 
       - name: Copy configs
-        uses: appleboy/scp-action@98930d398ce425af0148ea8a0e3295cd04fe2b7a
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          source: "docker-compose.yml"
+          source: "compose.yml"
           overwrite: true
           target: ${{ vars.SSH_PATH }}
 

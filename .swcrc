@@ -7,8 +7,13 @@
       "syntax": "typescript",
       "tsx": false,
       "decorators": true,
-      "useDefineForClassFields": true
+      "useDefineForClassFields": true,
+      "topLevelAwait": true
     },
+    "transform": {
+      "decoratorVersion": "2022-03"
+    },
+    "keepClassNames": true,
     "target": "esnext",
     "baseUrl": "./"
   },

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   daily-bot:
     container_name: daily-bot
