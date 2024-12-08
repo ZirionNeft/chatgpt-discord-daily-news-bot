@@ -1,34 +1,24 @@
+import backoffRetryFactory from '#common/backoff-retry.js';
+import config from '#common/config.js';
+import logger from '#common/logger.js';
 import { encode } from 'gpt-3-encoder';
-import {
-  ConfigService,
-  Inject,
-  InjectScope,
-  Logger,
-  Provider,
-  UseBackoff,
-} from '../../core';
-import { AbortControllerProvider } from '../bot';
+import type ChatGPTClient from './chatgpt.client.js';
 
-import { ChatGPTClient } from './chatgpt.client.js';
-import { RequestAbortedException } from './exceptions';
+const backoffRetry = backoffRetryFactory({
+  retryOnNullish: true,
+  strategy: (currentTry) => 1000 * 2 ** currentTry,
+  retryCount: 3,
+});
 
-const BACKOFF_SEND_MESSAGE_TRIES = 3;
+export default class ChatGPTService {
+  readonly #client: ChatGPTClient;
 
-@Provider({ scope: InjectScope.REQUEST })
-export class ChatGPTService {
-  private readonly logger = new Logger(this.constructor.name);
-
-  @Inject(ChatGPTClient)
-  private readonly client: ChatGPTClient;
-
-  @Inject(AbortControllerProvider)
-  private readonly abortController: AbortControllerProvider;
-
-  @Inject(ConfigService)
-  private readonly config: ConfigService;
+  constructor(client: ChatGPTClient) {
+    this.#client = client;
+  }
 
   async getCompletion(chunks: string[], date: string): Promise<string[]> {
-    this.logger.info(`Sending message to ChatGPT for the date '${date}'`);
+    logger.info(`Sending message to ChatGPT for the date '${date}'`);
 
     const completionParts: string[] = [];
 
@@ -37,33 +27,28 @@ export class ChatGPTService {
         const response = await this.sendMessage(chunk);
 
         completionParts.push(response);
-      } catch (e) {
-        if (e.name === 'AbortError') {
-          throw new RequestAbortedException();
-        }
-        this.logger.error(e);
+      } catch (e: any) {
+        logger.error(e);
       }
     }
 
     return completionParts;
   }
 
-  @UseBackoff(BACKOFF_SEND_MESSAGE_TRIES, ['AbortError'])
   private async sendMessage(text: string): Promise<string> {
-    const timeoutMs = +this.config.get('GPT_TIMEOUT_MS', 2 * 60 * 1000);
+    const timeoutMs = config.get('GPT_TIMEOUT_MS', 2 * 60 * 1000);
 
-    const response = await this.client.provider.sendMessage(text, {
+    const response = await backoffRetry(() => this.#client.provider.sendMessage(text, {
       timeoutMs,
-      abortSignal: this.abortController.signal,
-    });
+    }));
 
-    const tokenCost = +this.config.get('GPT_TOKEN_COST', 0.0003);
+    const tokenCost = config.get('GPT_TOKEN_COST');
     const responseTokens = encode(response.text).length;
     const promptTokens = encode(text).length;
 
-    this.logger.info(
+    logger.info(
       `Prompt chunk tokens: ${promptTokens}, GPT completed tokens: ${responseTokens}; Spent ~${
-        ((responseTokens + promptTokens) / 1000) * tokenCost
+        ((responseTokens + promptTokens) / 1000) * (tokenCost / 1e6)
       }`,
     );
 

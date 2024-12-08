@@ -1,4 +1,4 @@
-import { DailyNewsSlashCommandName } from './daily-news/daily-news.constants';
+import { DailyNewsSlashCommandName } from '#modules/bot/daily-news/constants.js';
 
 export default {
   commands: {

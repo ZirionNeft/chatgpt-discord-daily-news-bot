@@ -1,35 +1,48 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
-    "target": "es2020",
-    "module": "es2022",
-    "lib": [
-      "esnext"
-    ],
-    "moduleResolution": "node",
-    "baseUrl": ".",
-    "outDir": "build",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "declaration": true,
+    "verbatimModuleSyntax": true,
+    "removeComments": false,
     "esModuleInterop": true,
-    "alwaysStrict": true,
+    "target": "ESNext",
+    "paths": {
+      "#common/*": [
+        "src/common/*"
+      ],
+      "#modules/*": [
+        "src/modules/*"
+      ]
+    },
     "sourceMap": true,
-    "incremental": true,
-    "removeComments": true,
+    "outDir": "dist",
+    "baseUrl": "./",
+    "skipLibCheck": true,
+    "strictNullChecks": true,
+    "noImplicitAny": false,
     "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "allowJs": false,
+    "checkJs": false,
+    "resolveJsonModule": true,
+    "composite": false,
+    "declarationMap": true,
+    "inlineSources": false,
+    "isolatedModules": true,
     "noFallthroughCasesInSwitch": true,
-    "noImplicitReturns": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noImplicitAny": false,
-    "noImplicitThis": false,
-    "strictNullChecks": false,
+    "preserveWatchOutput": true,
+    "useDefineForClassFields": true,
+    "noImplicitThis": false
   },
   "include": [
     "src"
   ],
   "exclude": [
     "node_modules",
-    "test",
-    "build",
-    "**/*.spec.ts",
-    "**/*.test.ts"
+    "dist"
   ]
 }

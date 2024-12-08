@@ -1,88 +1,89 @@
-import dayjs, { Dayjs } from 'dayjs';
-import { Collection, Message, TextBasedChannel, TextChannel } from 'discord.js';
-import {
-  ConfigService,
-  cutUrlFromString,
-  delay,
-  FailedCommandException,
-  Inject,
-  Logger,
-  Provider,
-} from '../../core';
+import { FailedCommandError } from '#common/bot/command/errors/FailedCommandError.js';
+import config from '#common/config.js';
+import logger from '#common/logger.js';
+import { cutUrlFromString } from '#common/utils/cut-url-from-string.js';
+import { delay } from '#common/utils/delay.js';
+import type { Dayjs } from 'dayjs';
+import dayjs from 'dayjs';
+import type { Collection, Message, TextChannel } from 'discord.js';
+import { type TextBasedChannel } from 'discord.js';
 
 const DISCORD_TAGS_PATTERN =
   /<@[!&]?(\d+)>|<#(\d+)>|<@&(\d+)>|<a?:\w+:(\d+)>|<:\w+:(\d+)>/g;
 
-@Provider()
-export class MessagesService {
-  private readonly logger = new Logger(this.constructor.name);
+const API_REQ_LIMIT = config.get(
+  'DISCORD_API_REQ_LIMIT',
+  100,
+);
 
-  private readonly _apiReqLimit: number;
-
-  @Inject(ConfigService)
-  private readonly configService: ConfigService;
-
-  constructor() {
-    this._apiReqLimit = this.configService.get<number>(
-      'DISCORD_API_REQ_LIMIT',
-      100,
-    );
-  }
-
+export default class MessagesService {
   async fetchMessages(
     channel: TextChannel,
     targetDate: Dayjs,
     signal?: AbortSignal,
   ) {
-    const isValidMessage = (message: Message<true>) => {
+    const isValidMessage = (message: Message<boolean>): boolean => {
       const isSameDate = dayjs
         .utc(message.createdTimestamp)
         .isSame(targetDate, 'd');
+
       const isNotBot = !message.author.bot;
       const isNotEmptyMessage = !!message.content.trim().length;
       const isNotOnlyLink = cutUrlFromString(message.content).trim().length;
 
-      return isSameDate && isNotBot && isNotEmptyMessage && isNotOnlyLink;
+      return !!(isSameDate && isNotBot && isNotEmptyMessage && isNotOnlyLink);
     };
 
-    const firstMessage = await channel.messages.fetch(channel.lastMessageId);
+    if (!channel.lastMessageId) {
+      throw new FailedCommandError('Channel has no messages to fetch from.');
+    }
+
+    const firstMessage = await channel.messages.fetch(channel.lastMessageId!);
     const targetMessages: Message[] = isValidMessage(firstMessage)
       ? [firstMessage]
       : [];
-    let remainingRequests = this._apiReqLimit;
+    let remainingRequests = API_REQ_LIMIT;
 
     const options = { limit: 100, before: channel.lastMessageId };
     let fetchedMessages: Collection<string, Message>;
 
     do {
       if (signal?.aborted) {
-        throw new FailedCommandException('Interaction cancelled.');
+        throw new FailedCommandError('Interaction cancelled.');
       }
 
       if (remainingRequests == 0) {
-        this.logger.info('Reached rate limit, waiting before continuing...');
+        logger.info('Reached rate limit, waiting before continuing...');
 
         await delay(1000);
-        remainingRequests = this._apiReqLimit;
+        remainingRequests = API_REQ_LIMIT;
       }
 
       fetchedMessages = await channel.messages.fetch(options);
-      this.logger.info(
+      logger.info(
         `Fetching messages in #${channel.name} channel before message ${options.before}...`,
       );
-      options.before = fetchedMessages.last()?.id; // last message id
+
+      const msgId = fetchedMessages.last()?.id;
+
+      if (!msgId) {
+        logger.warn('No messages found');
+        break;
+      }
+
+      options.before = msgId; // last message id
       remainingRequests--;
 
       const filteredMessages = fetchedMessages.filter(isValidMessage);
 
       targetMessages.push(...filteredMessages.values());
 
-      this.logger.info(
+      logger.info(
         `Fetched ${fetchedMessages.size}, pushed ${filteredMessages.size}`,
       );
     } while (
       !dayjs.utc(fetchedMessages.last()?.createdAt).isBefore(targetDate, 'd')
-    );
+      );
 
     return targetMessages.reverse();
   }
@@ -92,7 +93,7 @@ export class MessagesService {
     date: Dayjs,
     signal?: AbortSignal,
   ) {
-    this.logger.info(
+    logger.info(
       `Breaking messages data for ${channel.id} channel into chunks`,
     );
 
@@ -103,7 +104,7 @@ export class MessagesService {
     );
 
     const sanitize = async (message: Message) => {
-      const contentWithoutTags = await this.formatDiscordTags(message);
+      const contentWithoutTags = await this.#formatDiscordTags(message);
       const contentWithoutLinks = cutUrlFromString(contentWithoutTags).trim();
       return contentWithoutLinks.trim().replace(/'/g, '"');
     };
@@ -129,7 +130,7 @@ export class MessagesService {
     }, Promise.resolve<string[]>([]));
   }
 
-  private async formatDiscordTags(message: Message) {
+  async #formatDiscordTags(message: Message) {
     let replacedStr = message.content;
     const matches = message.content.match(DISCORD_TAGS_PATTERN);
 
@@ -160,9 +161,12 @@ export class MessagesService {
         }
       } else if (match.startsWith('<a:')) {
         const emojiId = match.match(/<a:\w+:(\d+)>/)?.[1];
-        const emoji = message.client.emojis.cache.get(emojiId);
-        if (emoji) {
-          replacedStr = replacedStr.replace(match, emoji.toString());
+
+        if (emojiId) {
+          const emoji = message.client.emojis.cache.get(emojiId);
+          if (emoji) {
+            replacedStr = replacedStr.replace(match, emoji.toString());
+          }
         }
       }
     }

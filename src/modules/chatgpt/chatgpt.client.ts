@@ -1,48 +1,39 @@
+import config from '#common/config.js';
+import logger from '#common/logger.js';
+import { template } from '#common/utils/template-string.js';
+import type { IOnFinalized } from '@zirion/ioc';
 import { ChatGPTAPI } from 'chatgpt';
-import {
-  ConfigService,
-  Inject,
-  Logger,
-  Provider,
-  ProviderInstance,
-  template,
-} from '../../core';
+
 import chatGptConfig from './chatgpt.config.js';
 
-@Provider()
-export class ChatGPTClient implements ProviderInstance {
-  private readonly logger = new Logger(this.constructor.name);
-
-  @Inject(ConfigService)
-  private readonly configService: ConfigService;
-
-  private _client: ChatGPTAPI;
+export default class ChatGPTClient implements IOnFinalized {
+  #client!: ChatGPTAPI;
 
   get provider() {
-    if (!this._client) {
+    if (!this.#client) {
       throw new Error('Chat GPT client is no initialized');
     }
 
-    return this._client;
+    return this.#client;
   }
 
-  onProviderInit() {
-    const apiKey = this.configService.getOrThrow('OPENAI_API_KEY');
+  onFinalized() {
+    const apiKey = config.get('OPENAI_API_KEY');
 
-    const model = this.configService.get('GPT_MODEL', 'gpt-3.5-turbo');
-    const maxModelTokens = +this.configService.get('GPT_MODEL_TOKENS', 3950);
-    const maxTokens = +this.configService.get('GPT_COMPLETION_TOKENS', 1000);
-    const temperature = +this.configService.get('GPT_TEMPERATURE', 0.5);
+    const model = config.get('GPT_MODEL', 'gpt-4o');
+    const maxModelTokens = config.get('GPT_MODEL_TOKENS', 3950);
+    const maxTokens = config.get('GPT_COMPLETION_TOKENS', 1000);
+    const temperature = config.get('GPT_TEMPERATURE', 0.5);
 
-    const language = this.configService.get('RESULT_LANGUAGE', 'English');
+    const language = config.get('RESULT_LANGUAGE', 'English');
 
     const systemMessage = template(chatGptConfig.systemMessage, language);
 
-    this.logger.info('System message is:', systemMessage);
+    logger.info('System message is:', systemMessage);
 
-    const nodeEnv = this.configService.get('NODE_ENV', 'production');
+    const nodeEnv = config.get('NODE_ENV', 'production');
 
-    this._client = new ChatGPTAPI({
+    this.#client = new ChatGPTAPI({
       apiKey,
       systemMessage,
       debug: nodeEnv === 'development',
@@ -54,7 +45,7 @@ export class ChatGPTClient implements ProviderInstance {
       maxModelTokens,
     });
 
-    this.logger.info(
+    logger.info(
       `GPT Client created for model '${model}', cap tokens is ${maxModelTokens}, with temp ${temperature}`,
     );
   }

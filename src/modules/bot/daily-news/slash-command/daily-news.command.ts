@@ -1,102 +1,78 @@
-import { SharedNameAndDescription } from '@discordjs/builders';
-import { Dayjs } from 'dayjs';
-import {
-  CommandInteraction,
-  GuildTextBasedChannel,
-  SlashCommandBuilder,
-} from 'discord.js';
+import { FailedCommandError } from '#common/bot/command/errors/FailedCommandError.js';
+import type { ICommand } from '#common/bot/command/types.js';
+import ChunkedData, { GptTokensStrategy } from '#common/chunked-data-builder.js';
+import config from '#common/config.js';
+import logger from '#common/logger.js';
+import { delay } from '#common/utils/delay.js';
+import { template } from '#common/utils/template-string.js';
+import botConfig from '#modules/bot/bot.config.js';
+import type MessagesService from '#modules/bot/messages.service.js';
+import type ChatGPTService from '#modules/chatgpt/chatgpt.service.js';
+import type { Dayjs } from 'dayjs';
+import type { CommandInteraction } from 'discord.js';
+import { type GuildTextBasedChannel, SlashCommandBuilder } from 'discord.js';
 import { encode } from 'gpt-3-encoder';
-import {
-  ChunkedData,
-  Command,
-  ConfigService,
-  delay,
-  FailedCommandException,
-  GptTokensStrategy,
-  ICommand,
-  Inject,
-  InjectScope,
-  Logger,
-  RequestProvider,
-  template,
-  WrappedRequest,
-} from '../../../../core';
-import { ChatGPTService } from '../../../chatgpt';
-import botConfig from '../../bot.config';
-import { MessagesService } from '../../messages.service';
-import { AbortControllerProvider } from '../abort-controller.provider';
+import { DailyNewsSlashCommandName, DISCORD_MESSAGE_CHUNK_PREFIX } from '../constants.js';
 
-import {
-  DailyNewsSlashCommandName,
-  DISCORD_MESSAGE_CHUNK_PREFIX,
-} from '../daily-news.constants';
+export const dailyNewsCommandBuilder = (actionId: string) =>
+  new SlashCommandBuilder()
+    .setName(actionId)
+    .setDescription(
+      'Generate short digest of key topics for specific channels',
+    )
+    .addChannelOption((option) =>
+      option
+        .setName('channel')
+        .setDescription('Set channel from where content should be taken')
+        .setRequired(false),
+    )
+    .addStringOption((option) =>
+      option
+        .setName('date')
+        .setDescription('The date to fetch messages from (DD.MM.YY)')
+        .setRequired(false),
+    );
 
-@Command<SharedNameAndDescription>({
-  actionId: DailyNewsSlashCommandName,
-  builder: (actionId) =>
-    new SlashCommandBuilder()
-      .setName(actionId)
-      .setDescription(
-        'Generate short digest of key topics for specific channels',
-      )
-      .addChannelOption((option) =>
-        option
-          .setName('channel')
-          .setDescription('Set channel from where content should be taken')
-          .setRequired(false),
-      )
-      .addStringOption((option) =>
-        option
-          .setName('date')
-          .setDescription('The date to fetch messages from (DD.MM.YY)')
-          .setRequired(false),
-      ),
-  scopes: ['text'],
-  provider: RequestProvider.DISCORD,
-  concurrent: 1,
-  providerOptions: {
-    scope: InjectScope.REQUEST,
-  },
-})
-export class DailyNewsCommand implements ICommand {
-  private readonly logger = new Logger(this.constructor.name);
+export default class DailyNewsCommand implements ICommand {
 
-  get actionId() {
-    return DailyNewsSlashCommandName;
+  readonly #messagesService: MessagesService;
+  readonly #chatGptService: ChatGPTService;
+
+  constructor(
+    messagesService: MessagesService,
+    chatGptService: ChatGPTService,
+  ) {
+    this.#messagesService = messagesService;
+    this.#chatGptService = chatGptService;
   }
 
-  @Inject(MessagesService)
-  private readonly messagesService: MessagesService;
-
-  @Inject(ChatGPTService)
-  private readonly chatGptService: ChatGPTService;
-
-  @Inject(ConfigService)
-  private readonly configService: ConfigService;
-
-  @Inject(AbortControllerProvider)
-  private readonly abortController: AbortControllerProvider;
-
   async run(
-    { channel }: WrappedRequest<CommandInteraction>,
+    { channel }: CommandInteraction,
     targetChannel: GuildTextBasedChannel,
     dateOption: Dayjs,
   ): Promise<void> {
-    const gptModelTokens = +this.configService.get('GPT_MODEL_TOKENS', 3950);
-    const gptCompletionTokens = +this.configService.get(
+    const gptModelTokens = config.get('GPT_MODEL_TOKENS', 3950);
+    const gptCompletionTokens = config.get(
       'GPT_COMPLETION_TOKENS',
       1000,
     );
+
+    if (!channel) {
+      throw new Error('Channel is not defined');
+    }
+
+    if (!channel.isSendable()) {
+      throw new Error('Channel is not sendable');
+    }
 
     const chunkSize = gptModelTokens - gptCompletionTokens;
     if (chunkSize <= 0) {
       throw new Error(`GPT chunk size is too low: ${chunkSize}`);
     }
 
-    const messages = await this.messagesService.getChannelMessages(
+    const messages = await this.#messagesService.getChannelMessages(
       targetChannel,
       dateOption,
-      this.abortController.signal,
     );
 
     const gptRequestChunks = ChunkedData.of(messages)
@@ -107,23 +83,23 @@ export class DailyNewsCommand implements ICommand {
     const formattedDateOption = dateOption.format('LL');
 
     if (!gptRequestChunks.length) {
-      throw new FailedCommandException(
+      throw new FailedCommandError(
         `No messages for day '${formattedDateOption}' have been found`,
       );
     }
 
-    const minTokensToRun = +this.configService.get(
-      'MIN_TOKENS_FOR_RESULT',
+    const minTokensToRun = config.get(
+      'GPT_MIN_TOKENS_TO_ANALYZE',
       200,
-    );
+    )!;
 
     if (encode(gptRequestChunks[0] ?? '').length < minTokensToRun) {
-      throw new FailedCommandException(
+      throw new FailedCommandError(
         `History must have at least ${minTokensToRun} tokens to be analyzed`,
       );
     }
 
-    const gptResponseChunks = await this.chatGptService.getCompletion(
+    const gptResponseChunks = await this.#chatGptService.getCompletion(
       gptRequestChunks,
       formattedDateOption.toString(),
     );
@@ -137,7 +113,7 @@ export class DailyNewsCommand implements ICommand {
 
       const fullContent = `${header}${gptResponseChunks.join('\n')}`;
 
-      const discordMaxMessageLength = +this.configService.get(
+      const discordMaxMessageLength = config.get(
         'DISCORD_MAX_MESSAGE_LENGTH',
         2000,
       );
@@ -163,13 +139,13 @@ export class DailyNewsCommand implements ICommand {
     }
 
     if (typeof gptResponseChunks === 'object' && 'error' in gptResponseChunks) {
-      this.logger.error(gptResponseChunks.error as string);
+      logger.error(gptResponseChunks.error as string);
     } else {
-      this.logger.error(
+      logger.error(
         `Unknown response error: ${JSON.stringify(gptResponseChunks)}`,
       );
     }
 
-    throw new FailedCommandException('Empty result');
+    throw new FailedCommandError('Empty result');
   }
 }
