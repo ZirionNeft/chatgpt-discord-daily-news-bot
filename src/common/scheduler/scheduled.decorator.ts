@@ -6,7 +6,7 @@ export function Scheduled(time: ScheduleTime) {
     originalMethod: (...args: any[]) => any,
     { addInitializer }: ClassMethodDecoratorContext,
   ) {
-    addInitializer(() => {
+    addInitializer(function(this: any) {
       schedulerService.addTask({
         time,
         handler: originalMethod.bind(this),

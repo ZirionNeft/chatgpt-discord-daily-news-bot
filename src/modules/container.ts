@@ -1,5 +1,6 @@
 import DiscordBotClient from '#common/discord/discord-bot.client.js';
 import { DailyNewsSlashCommandName } from '#modules/bot/daily-news/constants.js';
+import DailyNewsSchedule from '#modules/bot/daily-news/daily-news.schedule.js';
 import DailyNewsCommand, { dailyNewsCommandBuilder } from '#modules/bot/daily-news/slash-command/daily-news.command.js';
 import DailyNewsInteractor from '#modules/bot/daily-news/slash-command/daily-news.interactor.js';
 import MessagesService from '#modules/bot/messages.service.js';
@@ -38,15 +39,18 @@ await container
       ChatGPTService,
     ],
   })
+  .add(DailyNewsInteractor, {
+    inject: [DailyNewsCommand, CommandsStore],
+    scope: InjectScope.REQUEST,
+  })
   .add(DiscordBotClient, {
     value: (commands, interactors) => new DiscordBotClient(commands, interactors, {
       intents: ['Guilds', 'GuildMessages'],
     }, container),
     inject: [CommandsStore, InteractorsStore],
   })
-  .add(DailyNewsInteractor, {
-    inject: [DiscordBotClient, DailyNewsCommand, CommandsStore],
-    scope: InjectScope.REQUEST,
+  .add(DailyNewsSchedule, {
+    inject: [DiscordBotClient, DailyNewsCommand],
   })
   .finalize();
 
