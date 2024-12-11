@@ -65,7 +65,7 @@ jobs:
       - name: Run docker on droplet
         uses: appleboy/ssh-action@v1.2.0
         env:
-          REPO_NAME: ${{ github.repository }}
+          REPO_NAME: ${{ github.repository | toLowerCase }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
