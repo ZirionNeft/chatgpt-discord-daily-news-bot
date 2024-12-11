@@ -15,6 +15,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Lowercase repo name
+        id: lowercase-repo
+        run: echo "lowercase-name=$(echo '${{ github.repository }}' | awk '{print tolower($0)}')" >> $GITHUB_ENV
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
@@ -65,7 +69,7 @@ jobs:
       - name: Run docker on droplet
         uses: appleboy/ssh-action@v1.2.0
         env:
-          REPO_NAME: ${{ github.repository | toLowerCase }}
+          REPO_NAME: ${{ env.lowercase-name }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
