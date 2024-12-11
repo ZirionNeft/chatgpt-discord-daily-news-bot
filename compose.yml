@@ -1,7 +1,7 @@
 services:
   daily-bot:
     container_name: daily-bot
-    image: "ghcr.io/${REPO_NAME}:${BRANCH_NAME}"
+    image: "ghcr.io/${REPO_NAME}"
     build:
       dockerfile: Dockerfile
     restart: unless-stopped
