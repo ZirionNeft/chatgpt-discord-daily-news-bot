@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - "main"
+    tags:
+      - 'v*'
 
 jobs:
   main:
@@ -22,18 +24,15 @@ jobs:
       - name: Lowercase repo name
         id: lowercase-repo
         run: echo ::set-output name=lowercase-name::$(echo "${{ github.repository }}" | awk '{print tolower($0)}')
-      - name: Prepare docker image name
-        id: image_names
-        run: |
-          IMAGES="${GITHUB_REPOSITORY/docker-/},ghcr.io/${GITHUB_REPOSITORY/docker-/}"
-          echo ::set-output name=images::${IMAGES}
       - name: Docker meta
         id: meta
-        uses: docker/metadata-action@v3
+        uses: docker/metadata-action@v5
         with:
-          images: ${{ steps.image_names.outputs.images }}
+          images: daily-news-bot
           tags: |
-            type=ref,event=tag
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
 
       # GENERAL
       - name: Login to ghcr.io
