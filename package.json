@@ -27,19 +27,19 @@
     "discord.js": "14.16.3",
     "gpt-3-encoder": "1.1.4",
     "pino": "9.5.0",
-    "zod": "3.23.8"
+    "zod": "3.24.1"
   },
   "devDependencies": {
     "@swc/cli": "0.5.2",
     "@swc/core": "1.9.3",
-    "@types/node": "22.10.1",
+    "@types/node": "22.10.2",
     "eslint": "9.16.0",
     "eslint-config-prettier": "9.1.0",
     "pino-pretty": "13.0.0",
     "ts-node": "10.9.2",
     "tsx": "4.19.2",
     "typescript": "5.7.2",
-    "typescript-eslint": "8.17.0"
+    "typescript-eslint": "8.18.0"
   },
   "author": "zirionneft <Nikita Kryukov>",
   "license": "Apache-2.0"
